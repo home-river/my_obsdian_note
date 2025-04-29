@@ -1,0 +1,213 @@
+{
+  "main": {
+    "id": "10f1a76e1db365f2",
+    "type": "split",
+    "children": [
+      {
+        "id": "5d94ce299faf6d6a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "38777de15467f573",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "isaacsim/Python script/Python Scripting.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Python Scripting"
+            }
+          },
+          {
+            "id": "4754862bbc621fce",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "isaacsim/Python script/示例代码解读.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "示例代码解读"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "9297258875d75493",
+    "type": "split",
+    "children": [
+      {
+        "id": "c01ed69059b87d02",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "09e7e3e61209c057",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "1947abe5e554e0e0",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "48765440960d0884",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "6e3bb976c106396f",
+    "type": "split",
+    "children": [
+      {
+        "id": "c3fe37fe10e2be16",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6ce98fcc1360ec53",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "isaacsim/Python script/示例代码解读.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "示例代码解读 的反向链接列表"
+            }
+          },
+          {
+            "id": "a560f844c70d292a",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "欢迎.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "欢迎 的出链列表"
+            }
+          },
+          {
+            "id": "e22f863f1ed67d03",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "aaadaf349ebf0b54",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "isaacsim/Python script/Python Scripting.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Python Scripting 的大纲"
+            }
+          }
+        ],
+        "currentTab": 3
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "obsidian-local-images-plus:Local Images Plus  0.16.3\r\nLocalize attachments (plugin folder)": false,
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "markdown-importer:打开 Markdown 格式转换器": false,
+      "obsidian-git:Open Git source control": false,
+      "table-editor-obsidian:Advanced Tables Toolbar": false
+    }
+  },
+  "active": "38777de15467f573",
+  "lastOpenFiles": [
+    "4472418525642a710a8aa45d8f82a0a1_MD5.jpeg",
+    "2a0de42996e2ed3e5e4cb342c1062655_MD5.jpeg",
+    "isaacsim/Python script/Python Scripting.md",
+    "Pasted image 20250428104345.png",
+    "isaacsim/Python script/示例代码解读.md",
+    "欧拉角和万向锁.md",
+    "杂项/翻译1.md",
+    "Pasted image 20250428095321.png",
+    "杂项",
+    "Pasted image 20250427174722.png",
+    "Pasted image 20250427174916.png",
+    "Pasted image 20250427174815.png",
+    "Pasted image 20250427174807.png",
+    "isaacsim配置.md",
+    "isaacsim/Python script/Python Scripting.md.lddec",
+    "isaacsim配置.md.lddec",
+    "欢迎.md.lddec",
+    "欢迎.md",
+    "[Core.md",
+    "isaacsim/Python script",
+    "isaacsim"
+  ]
+}

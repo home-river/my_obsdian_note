@@ -13,26 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/Python script/Python Scripting.md",
+                "file": "isaacsim/插件指南.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Python Scripting"
-            }
-          },
-          {
-            "id": "4754862bbc621fce",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "isaacsim/Python script/示例代码解读.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "示例代码解读"
+              "title": "插件指南"
             }
           }
         ]
@@ -156,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/Python script/Python Scripting.md",
+                "file": "isaacsim/插件指南.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Python Scripting 的大纲"
+              "title": "插件指南 的大纲"
             }
           }
         ],
@@ -170,7 +156,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 337.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -188,8 +174,8 @@
   },
   "active": "38777de15467f573",
   "lastOpenFiles": [
-    "isaacsim/常用包记录.md",
     "isaacsim/Python script/Python Scripting.md",
+    "isaacsim/常用包记录.md",
     "isaacsim/Python script/示例代码解读.md",
     "Pasted image 20250427174722.png",
     "Pasted image 20250427174916.png",

@@ -1037,3 +1037,71 @@ self._world.add_physics_callback(
         
 
 这样，每个物理子步你的机器人就会收到一组新的速度，被物理引擎拾取并执行，从而“动”起来。
+
+
+### 轮式机器人控制
+
+```python
+# 导入必要的模块
+from isaacsim.examples.interactive.base_sample import BaseSample  # 基础示例基类
+from isaacsim.core.utils.nucleus import get_assets_root_path    # 获取Nucleus资产路径
+from isaacsim.robot.wheeled_robots.robots import WheeledRobot   # 轮式机器人专用类
+from isaacsim.core.utils.types import ArticulationAction         # 关节动作数据结构
+import numpy as np  # 数值计算库
+
+class HelloWorld(BaseSample):
+    def __init__(self) -> None:
+        """初始化示例类"""
+        super().__init__()  # 必须调用父类初始化
+        return
+  
+
+    def setup_scene(self):
+
+        """场景搭建阶段（物理引擎尚未激活）"""
+        world = self.get_world()  # 获取世界实例
+        world.scene.add_default_ground_plane()  # 添加默认地平面
+        # 获取Nucleus服务器资产路径
+        assets_root_path = get_assets_root_path()
+        # 构建Jetbot机器人USD文件路径
+        jetbot_asset_path = assets_root_path + "/Isaac/Robots/Jetbot/jetbot.usd"
+        # 添加轮式机器人（专用WheeledRobot类）
+        self._jetbot = world.scene.add(
+            WheeledRobot(
+                prim_path="/World/Fancy_Robot",  # 场景中的路径
+                name="fancy_robot",              # 实例名称
+                wheel_dof_names=["left_wheel_joint", "right_wheel_joint"],  # 轮关节名
+                create_robot=True,               # 自动创建机器人
+                usd_path=jetbot_asset_path      # USD模型路径
+            )
+        )
+        return
+
+    async def setup_post_load(self):
+        """物理重置后的设置阶段（可安全访问物理属性）"""
+        self._world = self.get_world()  # 保存世界实例引用
+        self._jetbot = self._world.scene.get_object("fancy_robot")  # 获取机器人实例
+        # 注册物理回调（每个物理步长自动调用）
+        self._world.add_physics_callback(
+            "sending_actions",  # 回调名称
+            callback_fn=self.send_robot_actions  # 绑定的回调函数
+        )
+        return
+        
+    def send_robot_actions(self, step_size):
+        """
+        物理步长回调函数
+        参数:
+            step_size: 物理步长时间（秒）
+        """
+        # 使用专用轮式控制接口（apply_wheel_actions）
+        self._jetbot.apply_wheel_actions(
+            ArticulationAction(
+                joint_positions=None,      # 不设置目标位置
+                joint_efforts=None,       # 不设置目标力矩  
+                joint_velocities=5 * np.random.rand(2,)  # 设置随机速度（5rad/s内）
+            )
+        )
+        return
+```
+

@@ -1105,3 +1105,872 @@ class HelloWorld(BaseSample):
         return
 ```
 
+同样为该脚本添加一个extension脚本，将其加入交互式example中，可以直接load加载。
+
+
+## *两轮机器人控制器（add a Controller）*
+
+示例中，使用Controller模块进行高层的轮式机器人控制
+
+### 创建自定义控制器
+
+```python
+# 导入必要的模块
+from isaacsim.examples.interactive.base_sample import BaseSample  # 基础示例基类
+from isaacsim.core.utils.nucleus import get_assets_root_path    # 获取Nucleus服务器资产路径
+from isaacsim.robot.wheeled_robots.robots import WheeledRobot   # 轮式机器人专用类
+from isaacsim.core.utils.types import ArticulationAction         # 关节动作数据结构
+from isaacsim.core.api.controllers import BaseController        # 控制器基类
+import numpy as np  # 数值计算库
+
+class CoolController(BaseController):
+    """自定义差速驱动控制器（开环控制）"""
+    def __init__(self):
+        """
+        初始化控制器参数
+        注意：轮半径和轮距必须与实物机器人匹配
+        """
+        super().__init__(name="my_cool_controller")  # 指定控制器名称
+        self._wheel_radius = 0.03    # 驱动轮半径（单位：米）
+        self._wheel_base = 0.1125    # 左右轮间距（单位：米）
+        return
+        
+    def forward(self, command):
+        """
+        差速运动学前向计算
+        参数:
+            command: [线速度(m/s), 角速度(rad/s)]
+        返回:
+            ArticulationAction: 可被机器人直接执行的动作指令
+        """
+        # 差速驱动运动学转换公式：
+        # 左轮速度 = (2*线速度 - 角速度*轮距) / (2*轮半径)
+        # 右轮速度 = (2*线速度 + 角速度*轮距) / (2*轮半径)
+        joint_velocities = [
+            ((2 * command[0]) - (command[1] * self._wheel_base)) / (2 * self._wheel_radius),
+            ((2 * command[0]) + (command[1] * self._wheel_base)) / (2 * self._wheel_radius)
+        ]
+        # 返回关节速度指令（位置和力矩设为None表示不控制）
+        return ArticulationAction(
+            joint_velocities=joint_velocities,
+            joint_positions=None,
+            joint_efforts=None
+        )
+class HelloWorld(BaseSample):
+    """Isaac Sim轮式机器人控制示例"""
+    def __init__(self) -> None:
+        """初始化示例场景"""
+        super().__init__()  # 必须调用父类初始化
+        return
+        
+    def setup_scene(self):
+        """场景搭建阶段（物理引擎尚未激活）"""
+        world = self.get_world()  # 获取世界实例
+        world.scene.add_default_ground_plane()  # 添加默认地平面
+        # 加载Jetbot机器人USD模型
+        assets_root_path = get_assets_root_path()  # 获取Nucleus资产根路径
+        jetbot_asset_path = assets_root_path + "/Isaac/Robots/Jetbot/jetbot.usd"
+        # 创建轮式机器人实例
+        # 关键参数说明：
+        # - wheel_dof_names: 指定驱动轮关节名称（必须与USD文件内一致）
+        # - create_robot: 自动完成物理实体创建
+        world.scene.add(
+            WheeledRobot(
+                prim_path="/World/Fancy_Robot",  # 场景中的Prim路径
+                name="fancy_robot",              # 实例名称（用于后续获取）
+                wheel_dof_names=["left_wheel_joint", "right_wheel_joint"],
+                create_robot=True,
+                usd_path=jetbot_asset_path      # USD模型文件路径
+            )
+        )
+        return
+
+    async def setup_post_load(self):
+        """物理重置后的设置阶段（可安全访问物理属性）"""
+        self._world = self.get_world()
+        # 获取已创建的机器人实例
+        self._jetbot = self._world.scene.get_object("fancy_robot")
+        # 注册物理回调（每个物理步长自动调用）
+        # 注意：回调函数应保持轻量以避免影响实时性
+        self._world.add_physics_callback(
+            "sending_actions",  # 回调名称（用于调试识别）
+            callback_fn=self.send_robot_actions  # 绑定的回调函数
+        )
+        # 初始化自定义控制器（必须在物理重置后创建）
+        self._my_controller = CoolController()
+        return
+
+    def send_robot_actions(self, step_size):
+        """
+        物理步长回调函数
+        参数:
+            step_size: 当前物理步长时间（单位：秒）
+        """
+        # 设置控制指令：
+        # - 0.20 m/s 前进速度
+        # - π/4 rad/s (45度/秒) 转向速度
+        target_command = [0.20, np.pi / 4]  
+        # 通过控制器计算关节指令
+        action = self._my_controller.forward(target_command)
+        # 应用动作到机器人
+        # 等效方法：self._jetbot.apply_wheel_actions(action)
+        self._jetbot.apply_action(action)
+        return
+```
+
+使用自定义的CoolController类（继承BaseController），定义好物理参数，并通过公式计算把高层的[V，ω]命令转化成可用于两轮机器人的两个轮子的命令，然后返回一个正确的`ArcticulationAction`类给实例。==这样做的好处就是把动作指令抽象出来并解耦，方便后续修改==
+
+`forward` 方法是你在自定义控制器（继承自 `BaseController`）里必须实现的核心接口，用来把“高层运动命令”映射成“底层关节动作”。具体来说：
+
+1. **接口契约**
+    
+    - 在 `BaseController` 里，`forward(self, command)` 被定义或约定为“接收一组控制命令（如 `[v, ω]`），返回一个 `ArticulationAction`” 的抽象方法。
+        
+    - Isaac Sim 的控制循环会通过统一接口调用你的控制器——它并不知道你具体用了什么算法，只会调用 `controller.forward(command)` 来获取下一步动作。
+        
+2. **职责分离**
+    
+    - **控制器（Controller）**：只负责“把指令变成动作”，也就是 `forward` 里的运动学／动力学计算。
+        
+    - **示例（Sample）**：负责“何时调用控制器、把动作下发给机器人”，如你在 `send_robot_actions` 里做的那样：
+        
+```python
+        action = self._my_controller.forward(target_command) 
+        self._jetbot.apply_action(action)
+```
+        
+3. **为什么一定要它？**
+    
+    - **统一调用**：Isaac Sim 的框架在物理步回调里，拿到的是一个控制器实例，它只知道“要调用 `forward`”来得到 `ArticulationAction`，然后把它发给机器人。
+        
+    - **扩展性**：只要你实现了 `forward`，就可以无缝替换成任何复杂的控制算法（PID、MPC、强化学习策略……），而不必改动示例调度和回调那一套框架代码。
+
+
+### 创建复合控制器
+
+```python
+# 导入基础模块
+from isaacsim.examples.interactive.base_sample import BaseSample  # 基础示例类
+from isaacsim.core.utils.nucleus import get_assets_root_path    # Nucleus资产路径工具
+from isaacsim.robot.wheeled_robots.robots import WheeledRobot   # 轮式机器人基类
+# 导入控制器模块
+from isaacsim.robot.wheeled_robots.controllers.wheel_base_pose_controller import WheelBasePoseController  # 位姿控制器
+from isaacsim.robot.wheeled_robots.controllers.differential_controller import DifferentialController  # 差速控制器
+import numpy as np  # 数值计算库
+
+class HelloWorld(BaseSample):
+    """使用复合控制器的轮式机器人导航示例"""
+    
+    def __init__(self) -> None:
+        """初始化示例"""
+        super().__init__()  # 必须调用父类初始化
+        return
+
+    def setup_scene(self):
+        """场景搭建阶段（物理引擎尚未激活）"""
+        world = self.get_world()  # 获取世界实例
+        world.scene.add_default_ground_plane()  # 添加默认地平面
+        
+        # 加载Jetbot机器人USD模型
+        assets_root_path = get_assets_root_path()
+        if assets_root_path is None:
+            raise RuntimeError("未找到Nucleus服务器资产路径")
+        jetbot_asset_path = assets_root_path + "/Isaac/Robots/Jetbot/jetbot.usd"
+        
+        # 创建轮式机器人实例
+        world.scene.add(
+            WheeledRobot(
+                prim_path="/World/Fancy_Robot",  # 场景中的Prim路径
+                name="fancy_robot",              # 实例名称
+                wheel_dof_names=["left_wheel_joint", "right_wheel_joint"],  # 驱动轮关节名
+                create_robot=True,               # 自动创建物理实体
+                usd_path=jetbot_asset_path      # USD模型路径
+            )
+        )
+        return
+
+    async def setup_post_load(self):
+        """物理重置后的设置阶段"""
+        self._world = self.get_world()
+        self._jetbot = self._world.scene.get_object("fancy_robot")  # 获取机器人实例
+        
+        # 初始化复合控制器
+        self._my_controller = WheelBasePoseController(
+            name="cool_controller",  # 控制器名称
+            open_loop_wheel_controller=DifferentialController(
+                name="simple_control",  # 底层差速控制器名称
+                wheel_radius=0.03,      # 轮半径（单位：米）
+                wheel_base=0.1125       # 轮距（单位：米）
+            ),
+            is_holonomic=False  # 非全向移动机器人
+        )
+        
+        # 注册物理回调（60Hz固定频率）
+        self._world.add_physics_callback(
+            "sending_actions",  # 回调标识符
+            callback_fn=self.send_robot_actions  # 回调函数
+        )
+        return
+
+    def send_robot_actions(self, step_size):
+        """
+        物理步长回调函数
+        参数:
+            step_size: 物理步长时间（单位：秒）
+        """
+        # 获取当前机器人位姿
+        current_pos, current_orn = self._jetbot.get_world_pose()
+        
+        # 设置目标位置（X=0.8m, Y=0.8m）
+        target_pos = np.array([0.8, 0.8])  
+        
+        # 通过控制器计算控制指令
+        action = self._my_controller.forward(
+            start_position=current_pos,    # 当前XY位置
+            start_orientation=current_orn, # 当前朝向
+            goal_position=target_pos       # 目标XY位置
+        )
+        
+        # 应用控制指令到机器人
+        self._jetbot.apply_action(action)
+        return
+```
+
+代码重点：
+```python
+# 初始化复合控制器
+        self._my_controller = WheelBasePoseController(
+            name="cool_controller",  # 控制器名称
+            open_loop_wheel_controller=DifferentialController(
+                name="simple_control",  # 底层差速控制器名称
+                wheel_radius=0.03,      # 轮半径（单位：米）
+                wheel_base=0.1125       # 轮距（单位：米）
+            ),
+            is_holonomic=False  # 非全向移动机器人
+        )
+```
+
+上面的代码实例化一个复合控制器`WheelBasePoseController`，并在其中增加了一个差速控制器`DifferentialController`。
+
+```python
+ # 获取当前机器人位姿
+        current_pos, current_orn = self._jetbot.get_world_pose()
+        
+        # 设置目标位置（X=0.8m, Y=0.8m）
+        target_pos = np.array([0.8, 0.8])  
+        
+        # 通过控制器计算控制指令
+        action = self._my_controller.forward(
+            start_position=current_pos,    # 当前XY位置
+            start_orientation=current_orn, # 当前朝向
+            goal_position=target_pos       # 目标XY位置
+        )
+```
+
+然后通过直接获得当前机器人的朝向等姿态，设置好目标位置，让机器人直接过去，简洁高效。
+
+
+
+## *机械手*
+学习如何添加一个机械臂并实现抓取任务
+
+### Using the PickAndPlace Controller（使用抓放控制器）
+```python
+# 导入必要的模块
+from isaacsim.examples.interactive.base_sample import BaseSample  # 基础示例类
+from isaacsim.robot.manipulators.examples.franka import Franka    # Franka机械臂类
+from isaacsim.core.api.objects import DynamicCuboid               # 动态立方体
+from isaacsim.robot.manipulators.examples.franka.controllers import PickPlaceController  # 抓放控制器
+import numpy as np  # 数值计算库
+
+class HelloWorld(BaseSample):
+    """Franka机械臂抓取放置示例"""
+    
+    def __init__(self) -> None:
+        """初始化示例"""
+        super().__init__()  # 必须调用父类初始化
+        return
+
+    def setup_scene(self):
+        """场景搭建阶段"""
+        world = self.get_world()
+        world.scene.add_default_ground_plane()  # 添加地平面
+        
+        # 添加Franka机械臂
+        franka = world.scene.add(
+            Franka(
+                prim_path="/World/Fancy_Franka",  # USD场景中的路径
+                name="fancy_franka"               # 实例名称
+            )
+        )
+        
+        # 添加可抓取的蓝色立方体
+        world.scene.add(
+            DynamicCuboid(
+                prim_path="/World/random_cube",
+                name="fancy_cube",
+                position=np.array([0.3, 0.3, 0.3]),  # 初始位置(X,Y,Z)
+                scale=np.array([0.0515, 0.0515, 0.0515]),  # 尺寸缩放
+                color=np.array([0, 0, 1.0]),  # RGB蓝色
+            )
+        )
+        return
+
+    async def setup_post_load(self):
+        """物理初始化后设置"""
+        self._world = self.get_world()
+        self._franka = self._world.scene.get_object("fancy_franka")  # 获取机械臂实例
+        self._fancy_cube = self._world.scene.get_object("fancy_cube")  # 获取立方体实例
+        
+        # 初始化抓放控制器
+        self._controller = PickPlaceController(
+            name="pick_place_controller",
+            gripper=self._franka.gripper,          # 绑定机械臂夹爪
+            robot_articulation=self._franka        # 绑定机械臂本体
+        )
+        
+        # 注册物理回调（固定60Hz频率）
+        self._world.add_physics_callback("sim_step", callback_fn=self.physics_step)
+        
+        # 初始化夹爪为打开状态
+        self._franka.gripper.set_joint_positions(
+            self._franka.gripper.joint_opened_positions  # 使用预设的张开角度
+        )
+        
+        # 启动模拟（异步版本避免阻塞）
+        await self._world.play_async()
+        return
+
+    async def setup_post_reset(self):
+        """重置后初始化"""
+        self._controller.reset()  # 重置控制器状态机
+        self._franka.gripper.set_joint_positions(
+            self._franka.gripper.joint_opened_positions
+        )
+        await self._world.play_async()  # 重启模拟
+        return
+
+    def physics_step(self, step_size):
+        """
+        物理步长回调函数（核心控制逻辑）
+        参数:
+            step_size: 物理步长时间（秒）
+        """
+        # 获取立方体当前位置（仅需XYZ坐标）
+        cube_position, _ = self._fancy_cube.get_world_pose()
+        
+        # 设置目标放置位置（Z坐标考虑立方体半高）
+        goal_position = np.array([-0.3, -0.3, 0.0515 / 2.0])  
+        
+        # 获取机械臂当前关节角度
+        current_joint_positions = self._franka.get_joint_positions()
+        
+        # 通过控制器计算动作指令
+        actions = self._controller.forward(
+            picking_position=cube_position,          # 抓取点坐标
+            placing_position=goal_position,          # 放置点坐标
+            current_joint_positions=current_joint_positions  # 当前关节状态
+        )
+        
+        # 应用控制指令到机械臂
+        self._franka.apply_action(actions)
+        
+        # 检查任务是否完成（状态机到达终态）
+        if self._controller.is_done():
+            self._world.pause()  # 暂停模拟
+        return
+```
+
+==高层状态机封装==
+```python
+self._controller = PickPlaceController(
+    name="pick_place_controller",
+    gripper=self._franka.gripper,
+    robot_articulation=self._franka
+)
+
+```
+- `PickPlaceController` 内部已经实现了「接近→下降→闭爪→抬起→移动→下降→开爪→收回」的完整状态机，你只要初始化一次即可。
+    
+- 省去了自己编写每个阶段轨迹规划、时序切换、夹爪控制等琐碎逻辑。
+
+==统一的 forward 接口==
+```python
+actions = self._controller.forward(
+    picking_position=cube_position,
+    placing_position=goal_position,
+    current_joint_positions=current_joint_positions
+)
+```
+- 输入三要素：
+    
+    1. 抓取点坐标
+        
+    2. 放置点坐标
+        
+    3. 当前关节状态
+        
+- 输出：一次性可直接下发的 `ArticulationAction`（包含机械臂各关节和夹爪命令）。
+
+
+==与物理回调解耦==
+
+```python
+self._world.add_physics_callback("sim_step", callback_fn=self.physics_step)
+```
+- - 在每个物理时间步（60 Hz）中只做“读状态 → 调控制器 → 下发动作 → 检查完成”四步，控制逻辑与示例框架完全分离，易于维护和扩展。
+        
+- **通用可复用性**
+    
+    - 该控制器并不依赖 Franka 特殊运动学，只要机械臂支持标准 Articulation API（`get_joint_positions`、`apply_action`）并提供夹爪接口，就能“拿来就用”。
+        
+    - 你可以更换到 UR、KUKA、甚至自定义机械臂上，复用同样的高层抓放逻辑。
+
+
+这个示例的==核心流程==就是：
+
+1. **物理回调驱动**  
+    每个仿真物理步（默认 60 Hz）都会触发 `physics_step(step_size)`，保证你的控制逻辑和物理引擎同步。
+    
+2. **状态采样**  
+    在 `physics_step` 里，你先读取当前系统状态：
+    
+    - 拿到物体（立方体）的实时位置
+        
+    - 拿到机械臂的实时关节角度
+        
+3. **高层控制器计算**  
+    然后把这些状态和你的抓／放目标位置一起，传给 `PickPlaceController.forward(...)`：
+    
+    - 控制器内部根据抓放状态机，输出本时间步的关节和夹爪命令
+        
+4. **执行动作**  
+    最后把 `actions` 直接下发给机械臂：
+    
+    这样机械臂就会在物理引擎中按照控制器算好的轨迹一步步运动。
+    
+5. **任务终止检查**  
+    控制器内部维护了状态机，当抓放序列全部完成后，`is_done()` 返回 `True`，示例就调用 `world.pause()` 停止仿真。
+
+
+### 标准化任务Task
+什么是==Task==？ NVIDIA Isaac Sim 中的 Task 类提供了一种模块化场景创建、信息检索和计算指标的方法。它有助于创建具有复杂逻辑的更复杂场景。你需要使用 Task 类重写之前的代码。
+
+```python
+# 导入模块
+from isaacsim.examples.interactive.base_sample import BaseSample
+from isaacsim.robot.manipulators.examples.franka import Franka
+from isaacsim.core.api.objects import DynamicCuboid
+from isaacsim.robot.manipulators.examples.franka.controllers import PickPlaceController
+from isaacsim.core.api.tasks import BaseTask  # 任务系统基类
+import numpy as np
+
+class FrankaPlaying(BaseTask):
+    """Franka机械臂抓取任务（继承BaseTask实现标准化任务）"""
+    
+    def __init__(self, name):
+        """
+        初始化任务
+        参数:
+            name: 任务名称（需唯一）
+            offset: 可选的世界坐标系偏移量
+        """
+        super().__init__(name=name, offset=None)
+        self._goal_position = np.array([-0.3, -0.3, 0.0515 / 2.0])  # 放置目标位置
+        self._task_achieved = False  # 任务完成标志
+        return
+
+    def set_up_scene(self, scene):
+        """任务场景搭建（自动由世界调用）"""
+        super().set_up_scene(scene)
+        scene.add_default_ground_plane()  # 添加地平面
+        
+        # 添加动态立方体（抓取目标）
+        self._cube = scene.add(DynamicCuboid(
+            prim_path="/World/random_cube",
+            name="fancy_cube",
+            position=np.array([0.3, 0.3, 0.3]),  # 初始位置
+            scale=np.array([0.0515, 0.0515, 0.0515]),  # 尺寸（5.15cm立方体）
+            color=np.array([0, 0, 1.0])  # 初始蓝色
+        ))
+        
+        # 添加Franka机械臂
+        self._franka = scene.add(Franka(
+            prim_path="/World/Fancy_Franka",
+            name="fancy_franka"
+        ))
+        return
+
+    def get_observations(self):
+        """获取任务观测数据（供控制器使用）"""
+        cube_position, _ = self._cube.get_world_pose()
+        current_joint_positions = self._franka.get_joint_positions()
+        
+        # 返回结构化观测数据
+        observations = {
+            self._franka.name: {
+                "joint_positions": current_joint_positions,  # 机械臂关节角度
+            },
+            self._cube.name: {
+                "position": cube_position,          # 立方体当前位置
+                "goal_position": self._goal_position  # 目标位置
+            }
+        }
+        return observations
+
+    def pre_step(self, control_index, simulation_time):
+        """物理步长前的回调（用于任务状态检测）"""
+        cube_position, _ = self._cube.get_world_pose()
+        
+        # 检查是否到达目标位置（欧氏距离<2cm）
+        if not self._task_achieved and np.mean(np.abs(self._goal_position - cube_position)) < 0.02:
+            # 修改立方体颜色为绿色（任务完成视觉反馈）
+            self._cube.get_applied_visual_material().set_color(color=np.array([0, 1.0, 0]))
+            self._task_achieved = True
+        return
+
+    def post_reset(self):
+        """重置任务状态"""
+        self._franka.gripper.set_joint_positions(
+            self._franka.gripper.joint_opened_positions  # 重置夹爪为打开状态
+        )
+        self._cube.get_applied_visual_material().set_color(color=np.array([0, 0, 1.0]))  # 重置为蓝色
+        self._task_achieved = False  # 重置完成标志
+        return
+
+
+class HelloWorld(BaseSample):
+    """主示例类（集成任务系统）"""
+    
+    def __init__(self) -> None:
+        super().__init__()
+        return
+
+    def setup_scene(self):
+        """场景初始化（将任务添加到世界）"""
+        world = self.get_world()
+        world.add_task(FrankaPlaying(name="my_first_task"))  # 注册自定义任务
+        return
+
+    async def setup_post_load(self):
+        """物理初始化后设置"""
+        self._world = self.get_world()
+        
+        # 从任务中获取机械臂实例
+        self._franka = self._world.scene.get_object("fancy_franka")
+        
+        # 初始化抓放控制器
+        self._controller = PickPlaceController(
+            name="pick_place_controller",
+            gripper=self._franka.gripper,      # 绑定夹爪
+            robot_articulation=self._franka    # 绑定机械臂
+        )
+        
+        # 注册物理回调
+        self._world.add_physics_callback("sim_step", callback_fn=self.physics_step)
+        await self._world.play_async()  # 启动模拟
+        return
+
+    async def setup_post_reset(self):
+        """重置后初始化"""
+        self._controller.reset()  # 重置控制器状态机
+        await self._world.play_async()
+        return
+
+    def physics_step(self, step_size):
+        """物理步长回调（核心控制逻辑）"""
+        # 从任务系统获取最新观测数据
+        current_observations = self._world.get_observations()
+        
+        # 计算控制指令
+        actions = self._controller.forward(
+            picking_position=current_observations["fancy_cube"]["position"],  # 动态获取立方体位置
+            placing_position=current_observations["fancy_cube"]["goal_position"],
+            current_joint_positions=current_observations["fancy_franka"]["joint_positions"]
+        )
+        
+        # 应用控制指令
+        self._franka.apply_action(actions)
+        
+        # 检查任务完成状态
+        if self._controller.is_done():
+            self._world.pause()  # 暂停模拟
+        return
+```
+
+
+==1.任务（BaseTask）封装==：
+
+```python
+class FrankaPlaying(BaseTask):
+    …
+    def set_up_scene(self, scene):    # 场景搭建
+    def get_observations(self):        # 读取观测
+    def pre_step(self,…):             # 任务状态检测
+    def post_reset(self):             # 任务重置
+
+```
+- 继承 `BaseTask`，自动接入世界的任务管理器，无需手动管理场景、重置、完成判定。
+    
+- `get_observations` 负责规范化地收集所有“agent”和“object”的状态数据，为控制器提供统一接口。
+
+==2.统一观测接口==
+
+```python
+observations = {
+  "fancy_franka": {"joint_positions": …},
+  "fancy_cube":   {"position": …, "goal_position": …}
+}
+
+```
+- 上层脚本（HelloWorld）通过 `world.get_observations()` 一次性拿到所有任务观测，解耦了“任务内部状态采样”与“控制器使用”。
+
+
+==3.预步（pre_step）做完成检测==
+
+```python
+def pre_step(self, control_index, simulation_time):
+    if 距离 < 阈值:
+        标记任务完成，改变立方体颜色
+
+```
+- 在每帧执行控制前，用 `pre_step` 检测抓放是否达成，并做视觉反馈（颜色变绿）。
+    
+- 与控制逻辑分离，职责单一。
+
+==4.主循环中只关注决策与执行==
+
+```python
+def physics_step(self, step_size):
+    obs = self._world.get_observations()
+    actions = self._controller.forward(
+        picking_position=obs["fancy_cube"]["position"],
+        placing_position=obs["fancy_cube"]["goal_position"],
+        current_joint_positions=obs["fancy_franka"]["joint_positions"]
+    )
+    self._franka.apply_action(actions)
+```
+
+- - HelloWorld 不再直接读物体／机械臂状态，而是依赖任务系统提供的观测字典。
+        
+    - 控制器只关心“给我观测，我给你动作”，形成清晰的“观测→决策→执行”闭环。
+        
+
+==5.可复用、可组合==
+
+- 任何遵循同样观测格式的任务，都可以复用这个控制器和循环结构。
+    
+- 进一步可将多个 Task 同时添加到世界，实现更复杂的多任务协同。
+
+
+**一句话总结**：
+ 把“抓放”从示例脚本里剥离成标准化 `BaseTask`——它负责场景搭建、观测输出、完成检测与重置；HelloWorld 只要在每帧拿到这个任务的观测，调用 `PickPlaceController.forward(...)`，再下发动作，就实现了高度解耦、可复用的抓放演示。
+
+
+
+## 添加多个机器人
+
+演示如何添加多个机器人
+
+```python
+# -*- coding: utf-8 -*-
+from isaacsim.examples.interactive.base_sample import BaseSample
+from isaacsim.robot.manipulators.examples.franka.tasks import PickPlace
+from isaacsim.robot.wheeled_robots.robots import WheeledRobot
+from isaacsim.core.utils.nucleus import get_assets_root_path
+from isaacsim.robot.wheeled_robots.controllers.wheel_base_pose_controller import WheelBasePoseController
+from isaacsim.robot.manipulators.examples.franka.controllers import PickPlaceController
+from isaacsim.robot.wheeled_robots.controllers.differential_controller import DifferentialController
+from isaacsim.core.api.tasks import BaseTask
+from isaacsim.core.utils.types import ArticulationAction
+import numpy as np
+
+
+class RobotsPlaying(BaseTask):
+    """Franka机械臂与Jetbot协同任务（状态机实现）"""
+    
+    def __init__(
+        self,
+        name
+    ):
+        # 调用父类初始化并设置任务名
+        super().__init__(name=name, offset=None)
+        # Jetbot的目标位置 [X, Y, Z]
+        self._jetbot_goal_position = np.array([1.3, 0.3, 0])
+        # 任务状态机初始状态（0: 导航, 1: 减速, 2: 抓取）
+        self._task_event = 0
+        # 构造子任务：Franka抓取-放置任务
+        self._pick_place_task = PickPlace(
+            cube_initial_position=np.array([0.1, 0.3, 0.05]),
+            target_position=np.array([0.7, -0.3, 0.0515 / 2.0])
+        )
+        return
+
+    def set_up_scene(self, scene):
+        # 父类场景搭建初始化
+        super().set_up_scene(scene)
+        # 在场景中创建Franka机械臂和立方体（子任务内部实现）
+        self._pick_place_task.set_up_scene(scene)
+        # 获取Jetbot模型路径并加载
+        assets_root_path = get_assets_root_path()
+        jetbot_asset_path = assets_root_path + "/Isaac/Robots/Jetbot/jetbot.usd"
+        self._jetbot = scene.add(
+            WheeledRobot(
+                prim_path="/World/Fancy_Jetbot",
+                name="fancy_jetbot",
+                wheel_dof_names=["left_wheel_joint", "right_wheel_joint"],
+                create_robot=True,
+                usd_path=jetbot_asset_path,
+                position=np.array([0, 0.3, 0]),  # 初始位置在Y轴偏移0.3m
+            )
+        )
+        # 调整Franka机械臂的初始位置，避免与Jetbot或立方体冲突
+        pick_place_params = self._pick_place_task.get_params()
+        self._franka = scene.get_object(pick_place_params["robot_name"]["value"])
+        self._franka.set_world_pose(position=np.array([1.0, 0, 0]))
+        self._franka.set_default_state(position=np.array([1.0, 0, 0]))
+        return
+
+    def get_observations(self):
+        # 获取Jetbot当前位置与朝向
+        current_jetbot_position, current_jetbot_orientation = self._jetbot.get_world_pose()
+        # 构造观测字典，包含任务状态与Jetbot信息
+        observations= {
+            "task_event": self._task_event,
+            self._jetbot.name: {
+                "position": current_jetbot_position,
+                "orientation": current_jetbot_orientation,
+                "goal_position": self._jetbot_goal_position
+            }
+        }
+        # 合并Franka抓放子任务的观测
+        observations.update(self._pick_place_task.get_observations())
+        return observations
+
+    def get_params(self):
+        # 获取子任务参数，并添加Jetbot和Franka名称
+        pick_place_params = self._pick_place_task.get_params()
+        params_representation = pick_place_params
+        params_representation["jetbot_name"] = {"value": self._jetbot.name, "modifiable": False}
+        params_representation["franka_name"] = pick_place_params["robot_name"]
+        return params_representation
+
+    def pre_step(self, control_index, simulation_time):
+        # 状态0：Jetbot导航阶段，判断是否到达目标
+        if self._task_event == 0:
+            current_jetbot_position, _ = self._jetbot.get_world_pose()
+            # 当XY平面误差小于4cm时，切换到状态1
+            if np.mean(np.abs(current_jetbot_position[:2] - self._jetbot_goal_position[:2])) < 0.04:
+                self._task_event += 1
+                self._cube_arrive_step_index = control_index
+        # 状态1：减速缓冲阶段，固定等待200步后进入抓取状态
+        elif self._task_event == 1:
+            if control_index - self._cube_arrive_step_index == 200:
+                self._task_event += 1
+        return
+
+    def post_reset(self):
+        # 重置时打开Franka夹爪，并回到导航初始状态
+        self._franka.gripper.set_joint_positions(
+            self._franka.gripper.joint_opened_positions
+        )
+        self._task_event = 0
+        return
+
+
+class HelloWorld(BaseSample):
+    """主程序：集成多机器人协同仿真"""
+    
+    def __init__(self) -> None:
+        super().__init__()
+        return
+
+    def setup_scene(self):
+        # 注入复合任务到世界中
+        world = self.get_world()
+        world.add_task(RobotsPlaying(name="awesome_task"))
+        return
+
+    async def setup_post_load(self):
+        # 物理加载后获取世界与任务参数
+        self._world = self.get_world()
+        task_params = self._world.get_task("awesome_task").get_params()
+        # 获取Franka和Jetbot实例，用于后续控制
+        self._franka = self._world.scene.get_object(task_params["franka_name"]["value"])
+        self._jetbot = self._world.scene.get_object(task_params["jetbot_name"]["value"])
+        # 获取立方体名称，用于抓取控制
+        self._cube_name = task_params["cube_name"]["value"]
+        # 初始化Franka抓放控制器
+        self._franka_controller = PickPlaceController(
+            name="pick_place_controller",
+            gripper=self._franka.gripper,
+            robot_articulation=self._franka
+        )
+        # 初始化Jetbot位姿控制器（差速）
+        self._jetbot_controller = WheelBasePoseController(
+            name="cool_controller",
+            open_loop_wheel_controller=
+                DifferentialController(name="simple_control", wheel_radius=0.03, wheel_base=0.1125)
+        )
+        # 注册仿真每步回调并启动异步仿真
+        self._world.add_physics_callback("sim_step", callback_fn=self.physics_step)
+        await self._world.play_async()
+        return
+
+    async def setup_post_reset(self):
+        # 在每次仿真重置后，重置控制器状态并继续仿真
+        self._franka_controller.reset()
+        self._jetbot_controller.reset()
+        await self._world.play_async()
+        return
+
+    def physics_step(self, step_size):
+        # 每个物理步根据状态机选择执行导航、刹车或抓取动作
+        current_observations = self._world.get_observations()
+        # 状态0：Jetbot导航
+        if current_observations["task_event"] == 0:
+            self._jetbot.apply_wheel_actions(
+                self._jetbot_controller.forward(
+                    start_position=current_observations[self._jetbot.name]["position"],
+                    start_orientation=current_observations[self._jetbot.name]["orientation"],
+                    goal_position=current_observations[self._jetbot.name]["goal_position"]
+                )
+            )
+        # 状态1：Jetbot急刹车
+        elif current_observations["task_event"] == 1:
+            self._jetbot.apply_wheel_actions(ArticulationAction(joint_velocities=[-8, -8]))
+        # 状态2：Franka执行抓取
+        elif current_observations["task_event"] == 2:
+            # 停止Jetbot
+            self._jetbot.apply_wheel_actions(ArticulationAction(joint_velocities=[0.0, 0.0]))
+            # 计算并下发Franka抓放动作
+            actions = self._franka_controller.forward(
+                picking_position=current_observations[self._cube_name]["position"],
+                placing_position=current_observations[self._cube_name]["target_position"],
+                current_joint_positions=current_observations[self._franka.name]["joint_positions"]
+            )
+            self._franka.apply_action(actions)
+        # 如果抓放完成，则暂停仿真
+        if self._franka_controller.is_done():
+            self._world.pause()
+        return
+
+```
+
+代码解读：
+
+1. `RobotPlaying类`
+   
+	- 首先在初始化中设置jetbot的位置和任务状态机，并使用`PickPlace`模块创建一个`franka`机械臂抓取的子任务。
+	  
+	- 在`set_up_scene（）`中调用子任务的方法来设置franka机械臂和立方体，然后自定义添加jetbot，最后调整franka机械臂的位置。
+	  
+	- 在`get_observations`中，先构建观测字典，包括jetbot的位置，朝向，目标位置，任务状态机等，然后通`observations.update(self._pick_place_task.get_observations())`来合并完整的观测字典。
+
+	- 使用`get_params`来定义一个外部接口，返回聚合的参数，供外部脚本来初始化配置的。
+
+	- 最后使用`pre_step`来进行状态转移。`post_reset`方法用来重置任务
+
+
+2. `HelloWorld`类
+	在这个类中执行主要的活动，调用任务来搭建任务场景，初始化获取对应的实例，控制器等，最后按照观测数据来执行对应的任务。

@@ -1220,3 +1220,193 @@
 |`set_torsional_patch_radius(radius: float)`|radius|写入扭转补丁半径|
 |`set_visibility(visible: bool)`|visible|写入可见性状态|
 |`set_world_pose()`|—|写入当前世界位姿|
+
+---
+## SingleParticleSystem
+
+`SingleParticleSystem` 封装了 PhysX 粒子系统 (流体 / 沙粒 / VFX 粒子)，提供从各向异性控制到碰撞‑休眠参数的完整接口，可对粒子材质、粒子‑粒子/粒子‑网格交互与解算器迭代进行动态配置。
+
+### 一、核心属性
+
+|属性名|含义|
+|---|---|
+|`prim_path`|粒子系统 Prim 路径|
+|`name`|粒子系统名称|
+|`particle_system`|低层 PhysX PxParticleSystem 句柄|
+|`prim`|USD Prim 句柄|
+
+### 二、方法分类
+
+#### 1. 初始化与有效性
+
+|方法名|说明|
+|---|---|
+|`initialize()`|构建内部句柄|
+|`post_reset()`|场景 reset 后重初始化|
+|`is_valid() → bool`|句柄是否有效|
+
+#### 2. 启用／模式切换
+
+|方法名|说明|
+|---|---|
+|`apply_particle_isotropy()` / `apply_particle_anisotropy()`|切换粒子各向同性 / 各向异性|
+|`apply_particle_smoothing()`|开启流体平滑|
+|`set_particle_system_enabled(value)`|全局启停粒子系统|
+
+#### 3. 材质与属性
+
+|方法名|说明|
+|---|---|
+|`apply_particle_material(particle_materials)`|绑定粒子材质|
+|`get_applied_particle_material() → material`|读取已用粒子材质|
+
+#### 4. 读取接口（Getters）
+
+|方法名|返回值说明|
+|---|---|
+|`get_contact_offset()` / `get_rest_offset()`|粒子‑网格接触/静止偏移|
+|`get_particle_contact_offset()`|粒子‑粒子接触偏移|
+|`get_fluid_rest_offset()` / `get_solid_rest_offset()`|流体 / 固体静止偏移|
+|`get_enable_ccd() → bool`|是否启用 CCD|
+|`get_global_self_collision_enabled() → bool`|自碰撞是否全局启用|
+|`get_max_depenetration_velocity()`|最大去穿透速度|
+|`get_max_neighborhood()` / `get_max_velocity()`|最大邻域粒子数 / 速度限制|
+|`get_solver_position_iteration_count()`|解算器位置迭代次数|
+|`get_wind()`|全局风场向量|
+|`get_particle_system_enabled() → bool`|系统是否启用|
+|`get_simulation_owner()`|多实例仿真调度归属|
+
+#### 5. 写入接口（Setters）
+
+| 方法名                                                                 | 参数           | 说明          |
+| ------------------------------------------------------------------- | ------------ | ----------- |
+| `set_contact_offset(value)` / `set_rest_offset(value)`              | value: float | 修改接触/静止偏移   |
+| `set_particle_contact_offset(value)`                                | value: float | 修改粒子‑粒子接触偏移 |
+| `set_fluid_rest_offset(value)` / `set_solid_rest_offset(value)`     | float        | 流体 / 固体偏移   |
+| `set_enable_ccd(value: bool)`                                       | —            | 开关 CCD      |
+| `set_global_self_collision_enabled(value: bool)`                    | —            | 开关自碰撞       |
+| `set_max_depenetration_velocity(value)` / `set_max_velocity(value)` | float        | 穿透/速度限制     |
+| `set_max_neighborhood(value)`                                       | int          | 最大邻域粒子数     |
+| `set_solver_position_iteration_count(value)`                        | int          | 修改位置迭代次数    |
+| `set_wind(value)`                                                   | Vec3         | 设置风向 / 风速   |
+| `set_simulation_owner(value)`                                       | string / int | 指定仿真归属      |
+| `set_particle_system_enabled(value: bool)`                          | —            | 启／停粒子系统     |
+
+
+---
+
+## SingleRigidPrim
+
+`SingleRigidPrim` 封装单一刚体 Prim（Rigid Body）的物理与渲染接口，既可作为静态几何，也可启用刚体动力学。它支持对质量、密度、速度、质心 (CoM) 等惯性属性及睡眠阈值的读写，同时管理可视材质与可见性。
+
+### 一、类成员属性
+
+|属性名|含义|
+|---|---|
+|`prim_path`|刚体 Prim 在 USD 场景中的路径|
+
+### 二、类方法
+
+#### 1. 初始化与有效性
+
+|方法名|说明|
+|---|---|
+|`initialize()`|构建内部句柄|
+|`post_reset()`|场景 reset 后重新配置|
+|`is_valid() → bool`|检查句柄/Prim 是否有效|
+|`is_visual_material_applied() → bool`|可视材质是否已应用|
+
+#### 2. 物理使能 / 停用
+
+|方法名|说明|
+|---|---|
+|`enable_rigid_body_physics()`|启用刚体动力学|
+|`disable_rigid_body_physics()`|停用刚体动力学（转静态）|
+
+#### 3. 材质管理
+
+|方法名|说明|
+|---|---|
+|`apply_visual_material(visual_material)`|应用可视材质|
+|`get_applied_visual_material() → material`|读取当前可视材质|
+
+#### 4. 读取接口（Getters）
+
+|方法名|返回值说明|
+|---|---|
+|`get_current_dynamic_state() → State`|当前动力学状态|
+|`get_default_state() → State`|默认状态|
+|`get_mass() → float`|质量|
+|`get_density() → float`|密度|
+|`get_com() → (position, orientation)`|质心位置与朝向|
+|`get_linear_velocity() → Vec3`|线速度|
+|`get_angular_velocity() → Vec3`|角速度|
+|`get_sleep_threshold() → float`|睡眠阈值|
+|`get_local_pose() → Pose`|局部位姿|
+|`get_local_scale() → Vec3`|局部缩放|
+|`get_world_pose() → Pose`|世界位姿|
+|`get_world_scale() → Vec3`|世界缩放|
+|`get_visibility() → bool`|可见性|
+
+#### 5. 写入接口（Setters）
+
+| 方法名                                                                | 关键参数       | 说明          |
+| ------------------------------------------------------------------ | ---------- | ----------- |
+| `set_default_state()`                                              | —          | 保存当前为默认状态   |
+| `set_mass(mass)` / `set_density(density)`                          | float      | 改变质量 / 密度   |
+| `set_com(position, orientation)`                                   | Vec3, Quat | 设置质心位置/朝向   |
+| `set_linear_velocity(velocity)` / `set_angular_velocity(velocity)` | Vec3       | 设置线速度 / 角速度 |
+| `set_sleep_threshold(threshold)`                                   | float      | 设置睡眠阈值      |
+| `set_local_pose()` / `set_world_pose()`                            | —          | 写入局部 / 世界位姿 |
+| `set_local_scale(scale)`                                           | Vec3       | 写入局部缩放      |
+| `set_visibility(visible)`                                          | bool       | 开关可见性       |
+
+
+---
+## SingleXFormPrim
+
+`SingleXFormPrim` 封装了 USD 中的 **Xform Prim**（纯变换节点，可作为组或空物体），提供对可视材质与局部/世界变换、可见性的统一接口。常用于将多个子 Prim 编组或作为动画/控制骨骼的空节点。
+
+### 一、类成员属性
+
+|属性名|含义|
+|---|---|
+|`prim_path`|Xform Prim 在 USD 中的路径|
+
+### 二、类方法
+
+#### 1. 初始化与有效性
+
+|方法名|说明|
+|---|---|
+|`initialize()`|构建内部句柄|
+|`post_reset()`|场景 reset 后重新同步状态|
+|`is_valid() → bool`|Prim / 句柄是否合法|
+|`is_visual_material_applied() → bool`|可视材质是否已绑定|
+
+#### 2. 材质管理
+
+|方法名|说明|
+|---|---|
+|`apply_visual_material(visual_material)`|绑定可视材质|
+|`get_applied_visual_material() → material`|读取已绑定材质|
+
+#### 3. 读取接口（Getters）
+
+|方法名|返回值说明|
+|---|---|
+|`get_default_state() → State`|默认状态|
+|`get_local_pose() → Pose`|局部位姿|
+|`get_local_scale() → Vec3`|局部缩放|
+|`get_world_pose() → Pose`|世界位姿|
+|`get_world_scale() → Vec3`|世界缩放|
+|`get_visibility() → bool`|可见性|
+
+#### 4. 写入接口（Setters）
+
+| 方法名                                     | 关键参数 | 说明          |
+| --------------------------------------- | ---- | ----------- |
+| `set_default_state()`                   | —    | 保存当前为默认状态   |
+| `set_local_pose()` / `set_world_pose()` | —    | 写入局部 / 世界位姿 |
+| `set_local_scale(scale)`                | Vec3 | 写入局部缩放      |
+| `set_visibility(visible)`               | bool | 切换可见性       |

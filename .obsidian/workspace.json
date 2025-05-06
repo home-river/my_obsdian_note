@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/Isaacsim Editor/Core(api).md",
+                "file": "isaacsim/Python script/Python Scripting.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Core(api)"
+              "title": "Python Scripting"
             }
           }
         ],
@@ -157,13 +157,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/Isaacsim Editor/Core(api).md",
+                "file": "isaacsim/Python script/Python Scripting.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Core(api) 的大纲"
+              "title": "Python Scripting 的大纲"
             }
           }
         ],
@@ -189,8 +189,8 @@
   },
   "active": "f6833c3c9bcc1237",
   "lastOpenFiles": [
-    "isaacsim/Isaacsim Editor/导航.md",
     "isaacsim/Isaacsim Editor/Core(api).md",
+    "isaacsim/Isaacsim Editor/导航.md",
     "isaacsim/Isaacsim Editor",
     "isaacsim/常用包记录.md",
     "isaacsim/Python script/Python Scripting.md",

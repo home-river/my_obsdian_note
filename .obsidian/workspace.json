@@ -13,15 +13,30 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/Python script/Python Scripting.md",
+                "file": "isaacsim/Isaacsim Editor/Core(api).md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Python Scripting"
+              "title": "Core(api)"
+            }
+          },
+          {
+            "id": "f6833c3c9bcc1237",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "isaacsim/Isaacsim Editor/Core(api).md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Core(api)"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -142,13 +157,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/Python script/Python Scripting.md",
+                "file": "isaacsim/Isaacsim Editor/Core(api).md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Python Scripting 的大纲"
+              "title": "Core(api) 的大纲"
             }
           }
         ],
@@ -172,18 +187,20 @@
       "table-editor-obsidian:Advanced Tables Toolbar": false
     }
   },
-  "active": "38777de15467f573",
+  "active": "f6833c3c9bcc1237",
   "lastOpenFiles": [
-    "isaacsim/插件指南.md",
-    "isaacsim/Python script/Python Scripting.md",
+    "isaacsim/Isaacsim Editor/导航.md",
+    "isaacsim/Isaacsim Editor/Core(api).md",
+    "isaacsim/Isaacsim Editor",
     "isaacsim/常用包记录.md",
-    "isaacsim/Python script/示例代码解读.md",
-    "Pasted image 20250427174722.png",
-    "Pasted image 20250427174916.png",
+    "isaacsim/Python script/Python Scripting.md",
+    "2a0de42996e2ed3e5e4cb342c1062655_MD5.jpeg",
     "Pasted image 20250427174815.png",
+    "Pasted image 20250427174916.png",
+    "Pasted image 20250427174722.png",
+    "isaacsim/Python script/示例代码解读.md",
     "Pasted image 20250427174807.png",
     "4472418525642a710a8aa45d8f82a0a1_MD5.jpeg",
-    "2a0de42996e2ed3e5e4cb342c1062655_MD5.jpeg",
     "Pasted image 20250428104345.png",
     "欧拉角和万向锁.md",
     "杂项/翻译1.md",

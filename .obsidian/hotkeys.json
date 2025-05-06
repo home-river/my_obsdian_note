@@ -61,5 +61,14 @@
       ],
       "key": "6"
     }
+  ],
+  "editor:insert-wikilink": [
+    {
+      "modifiers": [
+        "Alt",
+        "Mod"
+      ],
+      "key": "K"
+    }
   ]
 }

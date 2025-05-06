@@ -1979,3 +1979,634 @@ class HelloWorld(BaseSample):
 
 ## 多个任务
 
+#### 示例1
+
+```python
+from isaacsim.examples.interactive.base_sample import BaseSample
+from isaacsim.core.utils.nucleus import get_assets_root_path
+from isaacsim.robot.manipulators.examples.franka.tasks import PickPlace
+from isaacsim.robot.manipulators.examples.franka.controllers import PickPlaceController
+from isaacsim.robot.wheeled_robots.robots import WheeledRobot
+from isaacsim.robot.wheeled_robots.controllers.wheel_base_pose_controller import WheelBasePoseController
+from isaacsim.robot.wheeled_robots.controllers.differential_controller import DifferentialController
+from isaacsim.core.api.tasks import BaseTask
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.utils.string import find_unique_string_name
+from isaacsim.core.utils.prims import is_prim_path_valid
+import numpy as np
+
+
+class RobotsPlaying(BaseTask):
+    def __init__(self, name, offset=None):
+        # 调用父类构造，传入任务名和可选偏移量
+        super().__init__(name=name, offset=offset)
+        # 任务状态机：0=导航，1=刹车等待，2=执行抓放
+        self._task_event = 0
+        # 随机化 Jetbot 的目标 X 坐标，并加上整体场景偏移
+        self._jetbot_goal_position = (
+            np.array([np.random.uniform(1.2, 1.6), 0.3, 0])  # 随机目标点
+            + self._offset                                 # 全局偏移
+        )
+        # 创建一个 PickPlace 子任务，并传递相同的偏移量
+        self._pick_place_task = PickPlace(
+            cube_initial_position=np.array([0.1, 0.3, 0.05]),      # 初始方块位置
+            target_position=np.array([0.7, -0.3, 0.0515 / 2.0]),   # 放置目标位置
+            offset=offset                                         # 子任务也平移
+        )
+        return
+
+    def set_up_scene(self, scene):
+        # 父类场景初始化（包括保存 scene 引用、注册基础对象列表等）
+        super().set_up_scene(scene)
+        # 初始化子任务的场景（创建 Franka + 方块 + 目标）
+        self._pick_place_task.set_up_scene(scene)
+
+        # 为 Jetbot 生成唯一的实例名，避免重名
+        jetbot_name = find_unique_string_name(
+            initial_name="fancy_jetbot",
+            is_unique_fn=lambda x: not self.scene.object_exists(x)
+        )
+        # 为 Jetbot 生成唯一的 USD prim 路径，避免路径冲突
+        jetbot_prim_path = find_unique_string_name(
+            initial_name="/World/Fancy_Jetbot",
+            is_unique_fn=lambda x: not is_prim_path_valid(x)
+        )
+        # 获取本地资产根目录，拼接 Jetbot 的 USD 文件路径
+        assets_root_path = get_assets_root_path()
+        jetbot_asset_path = assets_root_path + "/Isaac/Robots/Jetbot/jetbot.usd"
+        # 将 WheeledRobot（Jetbot）添加到场景
+        self._jetbot = scene.add(
+            WheeledRobot(
+                prim_path=jetbot_prim_path,       # 唯一路径
+                name=jetbot_name,                 # 唯一名称
+                wheel_dof_names=["left_wheel_joint", "right_wheel_joint"],
+                create_robot=True,
+                usd_path=jetbot_asset_path,       # USD 模型文件
+                position=np.array([0, 0.3, 0]),   # 初始放置位置（局部）
+            )
+        )
+        # 把 Jetbot 加入 BaseTask 管理的对象列表，以便统一偏移、重置
+        self._task_objects[self._jetbot.name] = self._jetbot
+
+        # 获取子任务里 Franka 的实例名，然后从 scene 中获取对象引用
+        pick_place_params = self._pick_place_task.get_params()
+        self._franka = scene.get_object(pick_place_params["robot_name"]["value"])
+        # 读取当前 Franka 世界坐标
+        current_position, _ = self._franka.get_world_pose()
+        # 将 Franka 在 X 方向平移 +1m（带入偏移后意义是叠加两级移动）
+        new_franka_pos = current_position + np.array([1.0, 0, 0])
+        self._franka.set_world_pose(position=new_franka_pos)
+        self._franka.set_default_state(position=new_franka_pos)
+
+        # 对所有注册在 self._task_objects 的对象，执行一次整体偏移
+        # 包括 Jetbot、Franka、方块、目标
+        self._move_task_objects_to_their_frame()
+        return
+
+    def get_observations(self):
+        # 读取 Jetbot 当前位姿
+        current_jetbot_position, current_jetbot_orientation = \
+            self._jetbot.get_world_pose()
+        # 构造本任务的观测信息，名称后缀加 "_event" 保证多任务环境下的唯一性
+        observations = {
+            self.name + "_event": self._task_event,
+            self._jetbot.name: {
+                "position": current_jetbot_position,
+                "orientation": current_jetbot_orientation,
+                "goal_position": self._jetbot_goal_position
+            }
+        }
+        # 将子任务的观测信息合并进来
+        observations.update(self._pick_place_task.get_observations())
+        return observations
+
+    def get_params(self):
+        # 从子任务获取参数字典（包含 cube_name、robot_name 等）
+        pick_place_params = self._pick_place_task.get_params()
+        params_representation = pick_place_params
+        # 把 Jetbot 的名字也加入参数，并标记为不可修改
+        params_representation["jetbot_name"] = {
+            "value": self._jetbot.name,
+            "modifiable": False
+        }
+        # Franka 名称沿用子任务的 robot_name 参数
+        params_representation["franka_name"] = pick_place_params["robot_name"]
+        return params_representation
+
+    def pre_step(self, control_index, simulation_time):
+        # 状态机逻辑：
+        # 0=导航到目标，1=刹车等待，2=切换到抓放子任务
+        if self._task_event == 0:
+            pos, _ = self._jetbot.get_world_pose()
+            # XY 平面距离小于 0.04m → 进入等待阶段
+            if np.mean(np.abs(pos[:2] - self._jetbot_goal_position[:2])) < 0.04:
+                self._task_event += 1
+                # 记录进入阶段的步索引，用于时序延迟
+                self._cube_arrive_step_index = control_index
+        elif self._task_event == 1:
+            # 等待固定 200 步后，切换到抓放
+            if control_index - self._cube_arrive_step_index == 200:
+                self._task_event += 1
+        return
+
+    def post_reset(self):
+        # 每次重置后打开 Franka 夹爪，并将状态机回到初始
+        self._franka.gripper.set_joint_positions(
+            self._franka.gripper.joint_opened_positions
+        )
+        self._task_event = 0
+        return
+
+
+class HelloWorld(BaseSample):
+    def __init__(self) -> None:
+        super().__init__()
+        # 用于存储所有子任务的列表
+        self._tasks = []
+        self._num_of_tasks = 3  # 同时运行几个任务
+        # 控制器列表
+        self._franka_controllers = []
+        self._jetbot_controllers = []
+        # 各种机器人对象和方块名称
+        self._jetbots = []
+        self._frankas = []
+        self._cube_names = []
+        return
+
+    def setup_scene(self):
+        # 在世界中创建多个 RobotsPlaying 任务，并沿 Y 方向分散
+        world = self.get_world()
+        for i in range(self._num_of_tasks):
+            world.add_task(
+                RobotsPlaying(
+                    name="my_awesome_task_" + str(i),
+                    offset=np.array([0, (i * 2) - 3, 0])  # 每个任务偏移不同的 Y
+                )
+            )
+        return
+
+    async def setup_post_load(self):
+        # 场景加载后，获取每个任务和对应的机器人／方块
+        self._world = self.get_world()
+        for i in range(self._num_of_tasks):
+            # 存储任务实例
+            task = self._world.get_task(name="my_awesome_task_" + str(i))
+            self._tasks.append(task)
+            params = task.get_params()
+            # 获取 Franka、Jetbot 实例
+            self._frankas.append(
+                self._world.scene.get_object(params["franka_name"]["value"])
+            )
+            self._jetbots.append(
+                self._world.scene.get_object(params["jetbot_name"]["value"])
+            )
+            # 记录方块名称，以便观察其位置
+            self._cube_names.append(params["cube_name"]["value"])
+            # 为每个 Franka 创建一个 PickPlaceController，并指定自定义的事件时序
+            self._franka_controllers.append(
+                PickPlaceController(
+                    name="pick_place_controller",
+                    gripper=self._frankas[i].gripper,
+                    robot_articulation=self._frankas[i],
+                    # 事件时序列表，控制夹取／放置各阶段的时长
+                    events_dt=[0.008, 0.002, 0.5, 0.1, 0.05, 0.05, 0.0025, 1, 0.008, 0.08]
+                )
+            )
+            # 为每个 Jetbot 创建差速控制器
+            self._jetbot_controllers.append(
+                WheelBasePoseController(
+                    name="cool_controller",
+                    open_loop_wheel_controller=DifferentialController(
+                        name="simple_control",
+                        wheel_radius=0.03,
+                        wheel_base=0.1125
+                    )
+                )
+            )
+        # 注册每个物理仿真步的回调函数
+        self._world.add_physics_callback("sim_step", callback_fn=self.physics_step)
+        await self._world.play_async()
+        return
+
+    async def setup_post_reset(self):
+        # 重置时清空每个控制器的状态，然后继续仿真
+        for ctrl in self._franka_controllers:
+            ctrl.reset()
+        for ctrl in self._jetbot_controllers:
+            ctrl.reset()
+        await self._world.play_async()
+        return
+
+    def physics_step(self, step_size):
+        # 每步仿真中，根据不同任务的状态机做动作分配
+        current_observations = self._world.get_observations()
+        for i, task in enumerate(self._tasks):
+            event_key = task.name + "_event"
+            jetbot = self._jetbots[i]
+            franka = self._frankas[i]
+            cube_name = self._cube_names[i]
+            # 状态 0：导航
+            if current_observations[event_key] == 0:
+                action = self._jetbot_controllers[i].forward(
+                    start_position=current_observations[jetbot.name]["position"],
+                    start_orientation=current_observations[jetbot.name]["orientation"],
+                    goal_position=current_observations[jetbot.name]["goal_position"]
+                )
+                jetbot.apply_wheel_actions(action)
+            # 状态 1：急刹
+            elif current_observations[event_key] == 1:
+                jetbot.apply_wheel_actions(
+                    ArticulationAction(joint_velocities=[-8.0, -8.0])
+                )
+            # 状态 2：停止并执行抓放
+            elif current_observations[event_key] == 2:
+                # 先停车
+                jetbot.apply_wheel_actions(
+                    ArticulationAction(joint_velocities=[0.0, 0.0])
+                )
+                # 然后让 Franka 执行 pick & place
+                actions = self._franka_controllers[i].forward(
+                    picking_position=current_observations[cube_name]["position"],
+                    placing_position=current_observations[cube_name]["target_position"],
+                    current_joint_positions=current_observations[franka.name]["joint_positions"]
+                )
+                franka.apply_action(actions)
+        return
+
+    def world_cleanup(self):
+        # 热重载或脚本清除时，清空所有列表，避免残留引用
+        self._tasks = []
+        self._franka_controllers = []
+        self._jetbot_controllers = []
+        self._jetbots = []
+        self._frankas = []
+        self._cube_names = []
+        return
+
+```
+
+*整体代码编写流程
+
+在RobotsPlaying中，先定义任务状态机，随机化jetbot 的目标位置，并通过pickplace创建一个franka的子任务。
+ - 场景设置中，先初始化父类场景，然后初始化子任务场景，然后添加jetbot，对franka进行偏移，最后再整体偏移一次。
+ - 然后就是任务状态机逻辑的编写
+
+在HelloWorld中，创建列表来存储任务和任务的对象，通过循环创建并加入偏移来把不同的任务的位置分开，在物理仿真中，也是根据不同任务的状态机进行循环分配指令。
+
+----
+
+
+
+***问答1
+
+为什么在设置场景的时候，只有`self._task_objects[self._jetbot.name]= self._jetbot`，而不对franka进行这一操作？
+- 因为 Franka 是由你在 `RobotsPlaying` 里组合进来的那个 `PickPlace` 子任务创建并注册的，所以它的生命周期（偏移、重置、管理）都已经在 `PickPlace.set_up_scene` 内部完成了；而在 `RobotsPlaying` 自己的 `self._task_objects` 里，只需要登记它自己新创建的对象——也就是 Jetbot——才能保证后续调用 `_move_task_objects_to_their_frame()` 和重置时，Jetbot 会按照偏移量一起被平移或复位。
+
+简单说，就是：
+
+- **Franka 和方块、目标，都在 `PickPlace` 里注册到它自己的 `task_objects`**，不需要在外层再重复；
+    
+- **Jetbot 是 `RobotsPlaying` 层新加的实体，所以要在这一级的 `self._task_objects` 里登记，才能让它参与统一的偏移／重置流程**。
+
+---
+***问答2
+
+在def set_up_scene(self, scene):中，为什么要用get_params来获取参数，并且后续获取franka实例？难道嵌套的子任务的参数没办法直接被主任务获取么？
+
+- 1. **子任务封装与解耦**  
+    `PickPlace` 作为一个独立的子模块，它自己管理——创建、命名、偏移、重置——方块、抓手、机械臂等一系列对象。为了不让外层的 `RobotsPlaying` 直接依赖它的内部属性，`PickPlace` 提供了一个干净的接口：`get_params()`，把所有重要的“结果”／“句柄”都以字典形式暴露出来（比如 `"robot_name": {...}`）。  
+    这样做一方面保证了子模块的封装性，一方面也让外层任务拿到必要的信息而不需要关心子任务的内部实现细节。
+    
+2. **对象创建时机与唯一性**  
+    `PickPlace.set_up_scene(scene)` 会在场景里真正加载 Franka 的 USD 模型，给它起一个唯一的名字和 prim 路径。此时 `RobotsPlaying` 并不知道名字是什么，除非让子任务告诉它。而且子任务内部可能会对名字做随机或防冲突处理（`find_unique_string_name`），所以外层必须通过子任务提供的参数来查，而不能“硬编码”或直接访问子任务的私有成员。
+    
+
+总结一下：
+
+> 虽然 `PickPlace` 把 Franka 放到场景里了，但它在自己内部用私有属性保存；外层任务要拿到这个实例，只能通过子任务公开的 `get_params()` 接口获取它的名字，再通过场景查回对象。这样既保持了模块间的低耦合，又能确保获取到正确的、经子任务唯一化处理过的机器人实例。
+
+---
+***问答3
+	
+对任务偏移的理解
+
+- - **本地立方体（任务坐标系）的定义**
+    
+    - 在 `PickPlace` 或 `RobotsPlaying` 里，你所有的坐标（方块初始位置、Franka 机械臂基座、Jetbot 目标点……）都写成相对于本地原点 `(0,0,0)` 的局部坐标。
+        
+    - 这就好像在这个本地立方体里画了一个小场景，里面放好了你的机器人和物体。
+        
+- **`offset`：把本地立方体在全局（World）里搬家**
+    
+    - 当你 new 一个 `RobotsPlaying(name, offset)`，这个 `offset` 就是告诉它要把“立方体”移动到世界坐标系里的哪个位置。
+        
+    - 例如 `offset = [0, 2, 0]`，就把整个小场景往 Y 轴正方向平移 2 米。
+        
+- **内部偏移（局部坐标）→ 世界坐标**
+    
+    - 每个物体先在本地立方体里定好位置，比如 Fr­anka 放在 `[0.1, 0, 0]`，方块放在 `[0.3, 0.2, 0]`。
+        
+    - 渲染到世界时，系统就把它们的局部坐标加上 `offset`，例如世界里的实际坐标是 `[0.1, 0, 0] + [0, 2, 0] = [0.1, 2, 0]`。
+        
+- **再一次整体平移**
+    
+    - 最后调用 `move_task_objects_to_their_frame()`，相当于对整个“立方体”做一次保险式的同步搬迁，把所有已经注册的物体都按那个同样的 `offset` 推到世界里对应位置，保证与第一次加偏移完全一致。
+
+---
+
+
+### 示例2
+
+```python
+# 导入必要的模块和类
+from isaacsim.examples.interactive.base_sample import BaseSample
+from isaacsim.core.utils.nucleus import get_assets_root_path
+from isaacsim.robot.manipulators.examples.franka.tasks import PickPlace
+from isaacsim.robot.manipulators.examples.franka.controllers import PickPlaceController
+from isaacsim.robot.wheeled_robots.robots import WheeledRobot
+from isaacsim.robot.wheeled_robots.controllers.wheel_base_pose_controller import WheelBasePoseController
+from isaacsim.robot.wheeled_robots.controllers.differential_controller import DifferentialController
+from isaacsim.core.api.tasks import BaseTask
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.utils.string import find_unique_string_name
+from isaacsim.core.utils.prims import is_prim_path_valid
+import numpy as np
+
+# 定义RobotsPlaying类，继承自BaseTask
+class RobotsPlaying(BaseTask):
+    def __init__(self, name, offset=None):
+        # 调用父类构造函数
+        super().__init__(name=name, offset=offset)
+        # 初始化任务事件为0
+        self._task_event = 0
+        # 随机生成Jetbot的目标位置
+        self._jetbot_goal_position = np.array([np.random.uniform(1.2, 1.6), 0.3, 0]) + self._offset
+        # 创建PickPlace任务实例，设置立方体的初始位置和目标位置
+        self._pick_place_task = PickPlace(cube_initial_position=np.array([0.1, 0.3, 0.05]),
+                                        target_position=np.array([0.7, -0.3, 0.0515 / 2.0]),
+                                        offset=offset)
+        return
+
+    # 设置场景
+    def set_up_scene(self, scene):
+        super().set_up_scene(scene)
+        # 设置PickPlace任务的场景
+        self._pick_place_task.set_up_scene(scene)
+        
+        # 查找唯一的Jetbot名称和prim路径
+        jetbot_name = find_unique_string_name(
+            initial_name="fancy_jetbot", is_unique_fn=lambda x: not self.scene.object_exists(x)
+        )
+        jetbot_prim_path = find_unique_string_name(
+            initial_name="/World/Fancy_Jetbot", is_unique_fn=lambda x: not is_prim_path_valid(x)
+        )
+        
+        # 获取资源根路径
+        assets_root_path = get_assets_root_path()
+        # 设置Jetbot的USD文件路径
+        jetbot_asset_path = assets_root_path + "/Isaac/Robots/Jetbot/jetbot.usd"
+        
+        # 向场景中添加Jetbot
+        self._jetbot = scene.add(
+            WheeledRobot(
+                prim_path=jetbot_prim_path,
+                name=jetbot_name,
+                wheel_dof_names=["left_wheel_joint", "right_wheel_joint"],  # 设置轮子的关节名称
+                create_robot=True,
+                usd_path=jetbot_asset_path,
+                position=np.array([0, 0.3, 0]),  # 设置初始位置
+            )
+        )
+        # 将Jetbot添加到任务对象字典中
+        self._task_objects[self._jetbot.name] = self._jetbot
+        
+        # 获取PickPlace任务的参数
+        pick_place_params = self._pick_place_task.get_params()
+        # 获取Franka机械臂对象
+        self._franka = scene.get_object(pick_place_params["robot_name"]["value"])
+        # 获取Franka的当前位置并调整位置
+        current_position, _ = self._franka.get_world_pose()
+        self._franka.set_world_pose(position=current_position + np.array([1.0, 0, 0]))
+        self._franka.set_default_state(position=current_position + np.array([1.0, 0, 0]))
+        
+        # 将任务对象移动到它们的坐标系中
+        self._move_task_objects_to_their_frame()
+        return
+
+    # 获取观察值
+    def get_observations(self):
+        # 获取Jetbot的当前位置和方向
+        current_jetbot_position, current_jetbot_orientation = self._jetbot.get_world_pose()
+        observations= {
+            self.name + "_event": self._task_event,  # 添加任务事件，确保名称唯一
+            self._jetbot.name: {
+                "position": current_jetbot_position,
+                "orientation": current_jetbot_orientation,
+                "goal_position": self._jetbot_goal_position  # Jetbot的目标位置
+            }
+        }
+        # 合并PickPlace任务的观察值
+        observations.update(self._pick_place_task.get_observations())
+        return observations
+
+    # 获取参数
+    def get_params(self):
+        # 获取PickPlace任务的参数
+        pick_place_params = self._pick_place_task.get_params()
+        params_representation = pick_place_params
+        # 添加Jetbot和Franka的名称参数
+        params_representation["jetbot_name"] = {"value": self._jetbot.name, "modifiable": False}
+        params_representation["franka_name"] = pick_place_params["robot_name"]
+        return params_representation
+
+    # 前向步进函数，在每个物理步进前调用
+    def pre_step(self, control_index, simulation_time):
+        # 任务事件0：Jetbot移动到目标位置
+        if self._task_event == 0:
+            current_jetbot_position, _ = self._jetbot.get_world_pose()
+            # 检查Jetbot是否接近目标位置
+            if np.mean(np.abs(current_jetbot_position[:2] - self._jetbot_goal_position[:2])) < 0.04:
+                self._task_event += 1  # 更新任务事件
+                self._cube_arrive_step_index = control_index  # 记录到达时的控制索引
+        # 任务事件1：等待200个控制步进
+        elif self._task_event == 1:
+            if control_index - self._cube_arrive_step_index == 200:
+                self._task_event += 1  # 更新任务事件
+        return
+
+    # 重置后处理函数
+    def post_reset(self):
+        # 打开Franka的夹爪
+        self._franka.gripper.set_joint_positions(self._franka.gripper.joint_opened_positions)
+        # 重置任务事件
+        self._task_event = 0
+        return
+
+# 定义HelloWorld类，继承自BaseSample
+class HelloWorld(BaseSample):
+    def __init__(self) -> None:
+        super().__init__()
+        # 初始化任务列表
+        self._tasks = []
+        # 设置任务数量为3
+        self._num_of_tasks = 3
+        # 初始化控制器列表
+        self._franka_controllers = []
+        self._jetbot_controllers = []
+        # 初始化机器人对象列表
+        self._jetbots = []
+        self._frankas = []
+        # 初始化立方体名称列表
+        self._cube_names = []
+        return
+
+    # 设置场景
+    def setup_scene(self):
+        world = self.get_world()
+        # 添加3个RobotsPlaying任务，每个任务有不同的偏移量
+        for i in range(self._num_of_tasks):
+            world.add_task(RobotsPlaying(name="my_awesome_task_" + str(i), offset=np.array([0, (i * 2) - 3, 0])))
+        return
+
+    # 异步设置函数，在场景加载后调用
+    async def setup_post_load(self):
+        self._world = self.get_world()
+        for i in range(self._num_of_tasks):
+            # 获取任务实例
+            self._tasks.append(self._world.get_task(name="my_awesome_task_" + str(i)))
+            # 获取任务参数
+            task_params = self._tasks[i].get_params()
+            # 获取Franka和Jetbot对象
+            self._frankas.append(self._world.scene.get_object(task_params["franka_name"]["value"]))
+            self._jetbots.append(self._world.scene.get_object(task_params["jetbot_name"]["value"]))
+            # 获取立方体名称
+            self._cube_names.append(task_params["cube_name"]["value"])
+            
+            # 创建Franka的PickPlace控制器
+            self._franka_controllers.append(PickPlaceController(
+                name="pick_place_controller",
+                gripper=self._frankas[i].gripper,
+                robot_articulation=self._frankas[i],
+                # 设置控制器的事件时间间隔，用于控制状态转换速度
+                events_dt=[0.008, 0.002, 0.5, 0.1, 0.05, 0.05, 0.0025, 1, 0.008, 0.08]))
+            
+            # 创建Jetbot的轮式基础姿态控制器
+            self._jetbot_controllers.append(WheelBasePoseController(
+                name="cool_controller",
+                open_loop_wheel_controller=DifferentialController(
+                    name="simple_control",
+                    wheel_radius=0.03,  # 轮子半径
+                    wheel_base=0.1125  # 轮子间距
+                )))
+        
+        # 添加物理步进回调函数
+        self._world.add_physics_callback("sim_step", callback_fn=self.physics_step)
+        # 异步播放世界
+        await self._world.play_async()
+        return
+
+    # 异步重置后处理函数
+    async def setup_post_reset(self):
+        for i in range(len(self._tasks)):
+            # 重置所有控制器
+            self._franka_controllers[i].reset()
+            self._jetbot_controllers[i].reset()
+        # 异步播放世界
+        await self._world.play_async()
+        return
+
+    # 物理步进回调函数
+    def physics_step(self, step_size):
+        # 获取当前观察值
+        current_observations = self._world.get_observations()
+        for i in range(len(self._tasks)):
+            # 根据任务事件应用不同的控制动作
+            if current_observations[self._tasks[i].name + "_event"] == 0:
+                # 事件0：控制Jetbot移动到目标位置
+                self._jetbots[i].apply_wheel_actions(
+                    self._jetbot_controllers[i].forward(
+                        start_position=current_observations[self._jetbots[i].name]["position"],
+                        start_orientation=current_observations[self._jetbots[i].name]["orientation"],
+                        goal_position=current_observations[self._jetbots[i].name]["goal_position"]))
+            elif current_observations[self._tasks[i].name + "_event"] == 1:
+                # 事件1：控制Jetbot后退
+                self._jetbots[i].apply_wheel_actions(ArticulationAction(joint_velocities=[-8.0, -8.0]))
+            elif current_observations[self._tasks[i].name + "_event"] == 2:
+                # 事件2：控制Jetbot停止，并控制Franka执行抓取放置动作
+                self._jetbots[i].apply_wheel_actions(ArticulationAction(joint_velocities=[0.0, 0.0]))
+                actions = self._franka_controllers[i].forward(
+                    picking_position=current_observations[self._cube_names[i]]["position"],
+                    placing_position=current_observations[self._cube_names[i]]["target_position"],
+                    current_joint_positions=current_observations[self._frankas[i].name]["joint_positions"])
+                self._frankas[i].apply_action(actions)
+        return
+
+    # 世界清理函数，在热重载或清除后调用
+    def world_cleanup(self):
+        # 清空所有列表
+        self._tasks = []
+        self._franka_controllers = []
+        self._jetbot_controllers = []
+        self._jetbots = []
+        self._frankas = []
+        self._cube_names = []
+        return
+```
+
+ ***一、`RobotsPlaying` 里的改动
+
+1. **更完整的生命周期钩子**
+    
+    - **新增** `set_up_scene(self, scene)`：取代了之前把所有场景搭建写在构造函数里的做法，现在先在这里把 PickPlace 子任务、Jetbot、Franka 都按顺序挂到 `scene` 上。
+        
+    - **新增** `pre_step(self, control_index, simulation_time)`：状态机从外层 `physics_step` 搬到任务内部，`pre_step` 里根据 `_task_event` 切换 Jetbot 的导航→急刹→等待→抓放。
+        
+    - **新增** `post_reset(self)`：每次 reset 时单独打开 Franka 夹爪并把 `_task_event` 重置，比以前在 HelloWorld 里统一清零更本地化。
+        
+    - **新增** `world_cleanup(self)`：给热重载或退出时清理 `self._task_objects`，防止残留。
+        
+2. **Jetbot 的创建方式变了**
+    
+    - 以前是直接在 HelloWorld 里 `world.add_task` 完成，现在在 `set_up_scene` 用 `scene.add(WheeledRobot(...))`，并用 `find_unique_string_name` 去生成 prim 路径 和 名称，保证不重复。
+        
+3. **Franka 的初始化**
+    
+    - 通过 `PickPlace` 子任务拿到 `robot_name` 后，直接用 `scene.get_object(...)` 抓取出来，然后手动 `set_world_pose` 和 `set_default_state` 平移到新位置，而不再单纯依赖 offset 叠加。
+        
+4. **参数与观测的合并**
+    
+    - `get_observations()` 先构建自己（Jetbot）的观测，再 `update(self._pick_place_task.get_observations())` 把 PickPlace 的观测拼进来。
+        
+    - `get_params()` 也把 PickPlace 的 `robot_name`、`cube_name` 拷过来，并额外加上 `jetbot_name` 字段。
+        
+
+---
+
+***二、`HelloWorld` 驱动层面的改动
+
+1. **物理回调不再做状态机**
+    
+    - 状态机逻辑全搬到 `RobotsPlaying.pre_step`，HelloWorld 的 `physics_step` 只负责按索引取出各任务的观测，然后仅做「导航→急刹→抓放」动作下发，不再操心事件切换。
+        
+2. **重置钩子改名并异步化**
+    
+    - 之前叫 `setup_post_reset`，直接在其中遍历 `ctrl.reset()`；新版本依旧保留这个功能（并加上 `async`），风格上与 `setup_post_load` 对齐。
+        
+3. **清理接口**
+    
+    - 新增 `world_cleanup`，在热重载或示例结束时，把所有存的列表（任务、机器人、控制器、方块名）清空，防止内存或引用泄漏。
+        
+4. **小的命名和组织差异**
+    
+    - 在遍历任务时，老版 `for i, task in enumerate(self._tasks)` 改成了 `for i in range(len(self._tasks))`，这种写法虽效果一致，但可读性稍逊。
+        
+    - `setup_scene`、`setup_post_load`、`setup_post_reset` 三大阶段的职责更清晰：`setup_scene` 只挂任务，`setup_post_load` 只抓对象 & 建控制器，`setup_post_reset` 只复位控制器。
+        
+
+---
+
+**总结：**
+
+- 新版把「**场景搭建**」、「**状态机**」、「**观测/参数接口**」这几块高度解耦，放到 `RobotsPlaying` 里自己管理；
+    
+- 而 `HelloWorld` 则更聚焦于「**多任务并行管理**」和「**统一的回调/复位流程**」。

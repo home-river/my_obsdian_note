@@ -460,3 +460,108 @@ App Selector 的配置文件位于：
 |**USD**|USD 相关文档|
 |- **USD Reference Guide**|USD参考指南，详细讲解USD文件格式和使用|
 |**F1**|快捷键F1，直接打开帮助文档|
+
+
+
+---
+## Environment Setup
+
+Isaac Sim 是基于 NVIDIA Omniverse 构建的，并使用 Omniverse Kit 提供的工具。Omniverse Kit 自带一个默认的 UI，使您能够轻松编辑 USD stage。在本教程中，您将学习设置环境、在 USD stage 上添加和编辑简单对象及其属性、使用关节和连杆绑定刚体，以及添加相机和传感器的基本步骤。目标是帮助您掌握导航 Isaac Sim 的基础技能，熟悉常用术语，并使用 GUI 构建环境和设置机器人。
+
+## Learning Objectives
+
+本教程将指导您使用 Isaac Sim GUI 提供的工具，构建一个启用物理仿真的虚拟世界，包括：
+
+- 设置全局舞台属性
+    
+- 设置全局物理属性
+    
+- 添加地面平面
+    
+- 添加灯光
+    
+
+## Getting Started
+
+### Prerequisites
+
+要开始一个干净的 Isaac Sim stage，请在 “File” 菜单中单击 “New”。该 stage 默认包含一个 World Xform 和一个 defaultLight，可在左侧 Stage 树的 Stage 标签下找到。
+
+## Setting up Stage Properties
+
+在向舞台添加任何内容之前，先确认当前的舞台属性设置符合预期规范。
+
+1. 转到 “Edit > Preferences” 打开偏好设置面板。
+    
+2. 在面板左侧的列中，浏览按类别分组的 Omniverse Kit 各种设置。
+    
+3. 在左侧列中选择 “Stage”，查看以下属性：
+    
+    - **Up 轴**：默认在 Isaac Sim 中为 Z。如果您的资源在其他软件中创建时使用了不同的上轴，导入时可能会出现旋转。
+        
+    - **阶段单位**：2022.1 之前的 Isaac Sim 版本使用厘米，但现在默认是米。然而，Omniverse Kit 的默认单位仍为厘米。如遇到 USD 单位偏差 100 倍，请留意。
+        
+    - **默认旋转顺序**：按 X、Y、Z 的顺序执行旋转。
+        
+![[场景设置.png]]
+## Creating the Physics Scene
+
+要添加用于模拟真实物理（包括重力和物理时间步长）的 Physics Scene：
+
+1. 在菜单栏中单击 “Create > Physics > Physics Scene”。
+    
+2. 验证 PhysicsScene 已添加到 Stage 树。
+    
+3. 单击该条目以查看其属性。您会看到重力指向 -Z 方向，大小为 9.8，提醒您长度单位为米。
+    
+
+除非模拟数百个刚体和机器人，否则使用 CPU 求解器比 GPU 更高效，因此本教程中：
+
+- 禁用 GPU dynamics，并在 Physics Scene 的属性页中将 Broadphase 类型设置为 MBP。
+    
+
+![[场景设置2.png]]
+
+## Adding a Ground Plane
+
+地面平面可防止启用物理的对象坠落到平面下方。尽管可视区域仅覆盖每个方向 25 米，但其碰撞属性会无限延伸。
+
+1. 在菜单栏中单击 “Create > Physics > Ground Plane” 添加地面平面。
+    
+2. 单击眼睛图标并选择 “Grid” 打开网格，以便更容易看到平面。
+    
+
+## Lighting
+
+每个新舞台都会预先包含一个 defaultLight，否则您将看不到任何内容。该默认灯光是舞台中 Environment xform 的子节点，可在 Stage 树中找到。
+
+要创建额外的聚光灯：
+
+1. 如果尚未添加地面平面，请先执行 “Create > Physics > Ground Plane”，以便能看到灯光反射。
+    
+2. 转到 “Create > Light > Sphere Light”。
+    
+3. 将灯光向上移动 7 个单位，并在 X、Y 轴上将旋转设置为 0，使其朝下。
+    
+4. 在属性面板中，展开 “Main > Color”，单击颜色栏并选择所需颜色。
+    
+5. 将 “Main > Intensity” 设置为 1e6；将 “Main > Radius” 设置为 0.05；在 “Shaping > cone:angle” 中将聚光角度限制为 45 度；在 “Shaping > cone:softness” 中将边缘柔化设置为 0.05。
+    
+6. 为了更好地对比，可在 defaultLight 的属性面板中将 “Main > Intensity” 调低至 300。
+    
+![[场景设置3.png]]
+
+## Summary
+
+本教程介绍了创建适合物理仿真和测试 Isaac Sim 的虚拟世界所需的基本步骤，涵盖了：
+
+- 添加地面平面、灯光和物理场景。
+    
+
+## Next Steps
+
+继续阅读 “Add Simple Objects” 教程，了解如何向 Isaac Sim 添加简单对象并编辑其属性。
+
+## Further Learning
+
+若想深入了解并使用更丰富的世界构建工具，可参考我们的姊妹产品 Omniverse Composer。

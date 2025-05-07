@@ -11,17 +11,30 @@
             "id": "20789372d520658a",
             "type": "leaf",
             "state": {
+              "type": "image",
+              "state": {
+                "file": "Create选项卡.jpeg"
+              },
+              "icon": "lucide-image",
+              "title": "Create选项卡"
+            }
+          },
+          {
+            "id": "6926afbe165766bd",
+            "type": "leaf",
+            "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/Isaacsim Editor/Core（Prim）.md",
+                "file": "isaacsim/GUI.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Core（Prim）"
+              "title": "GUI"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -142,13 +155,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/Isaacsim Editor/Core（Prim）.md",
+                "file": "isaacsim/GUI.md",
                 "followCursor": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Core（Prim） 的大纲"
+              "title": "GUI 的大纲"
             }
           }
         ],
@@ -172,32 +185,36 @@
       "table-editor-obsidian:Advanced Tables Toolbar": false
     }
   },
-  "active": "aaadaf349ebf0b54",
+  "active": "6926afbe165766bd",
   "lastOpenFiles": [
-    "isaacsim/Isaacsim Editor/Core(api).md",
-    "isaacsim/Isaacsim Editor/Core（Prim）.md",
-    "isaacsim/Isaacsim Editor/导航.md",
-    "isaacsim/Isaacsim Editor/未命名",
-    "isaacsim/Python script/Python Scripting.md",
-    "isaacsim/Isaacsim Editor",
-    "isaacsim/常用包记录.md",
-    "2a0de42996e2ed3e5e4cb342c1062655_MD5.jpeg",
+    "Create选项卡.jpeg",
+    "欢迎.md",
+    "欧拉角和万向锁.md",
+    "isaac sim selector.jpeg",
+    "Isaacsim asset Browser.png",
+    "isaacsim配置.md",
+    "Pasted image 20250427174722.png",
+    "Pasted image 20250427174807.png",
     "Pasted image 20250427174815.png",
     "Pasted image 20250427174916.png",
-    "Pasted image 20250427174722.png",
+    "isaacsim/GUI.md",
+    "isaacsim/API-Isaacsim documentation.md",
+    "Pasted image 20250507140453.png",
+    "2eebeb8e7180ac58391cde06a134e151_MD5.jpeg",
+    "Pasted image 20250507140456.png",
+    "isaacsim/Python script/Python Scripting.md",
     "isaacsim/Python script/示例代码解读.md",
-    "Pasted image 20250427174807.png",
-    "4472418525642a710a8aa45d8f82a0a1_MD5.jpeg",
-    "Pasted image 20250428104345.png",
-    "欧拉角和万向锁.md",
+    "isaacsim/Isaacsim Editor/Core（Prim）.md",
+    "isaacsim/Isaacsim Editor/Core(api).md",
+    "isaacsim/Isaacsim Editor/导航.md",
+    "isaacsim/Isaacsim Editor/未命名",
+    "isaacsim/Isaacsim Editor",
+    "isaacsim/常用包记录.md",
     "杂项/翻译1.md",
-    "Pasted image 20250428095321.png",
     "杂项",
-    "isaacsim配置.md",
     "isaacsim/Python script/Python Scripting.md.lddec",
     "isaacsim配置.md.lddec",
     "欢迎.md.lddec",
-    "欢迎.md",
     "[Core.md",
     "isaacsim/Python script",
     "isaacsim"

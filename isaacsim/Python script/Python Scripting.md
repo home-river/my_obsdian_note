@@ -2610,3 +2610,1676 @@ class HelloWorld(BaseSample):
 - 新版把「**场景搭建**」、「**状态机**」、「**观测/参数接口**」这几块高度解耦，放到 `RobotsPlaying` 里自己管理；
     
 - 而 `HelloWorld` 则更聚焦于「**多任务并行管理**」和「**统一的回调/复位流程**」。
+
+
+
+## 数据日志
+
+### 日志记录
+
+代码解读：
+```python
+def _on_logging_event(self, val):
+    # 获取当前仿真世界对象
+    world = self.get_world()
+    # DataLogger 对象在 World 中默认已定义
+    data_logger = world.get_data_logger()  
+    
+    # 如果数据记录器尚未启动，则进行初始化
+    if not data_logger.is_started():
+        # 从任务参数中读取机器人与目标物体的名称
+        robot_name = self._task_params["robot_name"]["value"]
+        target_name = self._task_params["target_name"]["value"]
+
+        # -------------------------------
+        # 定义逐帧（每个物理时间步）记录数据的函数
+        # 当 DataLogger 已启动时，World 会在每个时间步调用它
+        # -------------------------------
+        def frame_logging_func(tasks, scene):
+            return {
+                # 机器人各关节当前位置（转成 list 方便 JSON 序列化）
+                "joint_positions": scene.get_object(robot_name)
+                                     .get_joint_positions()
+                                     .tolist(),
+                # 控制器在该步施加的目标关节角
+                "applied_joint_positions": scene.get_object(robot_name)
+                                                .get_applied_action()
+                                                .joint_positions
+                                                .tolist(),
+                # 目标物体在世界坐标系中的位置
+                "target_position": scene.get_object(target_name)
+                                        .get_world_pose()[0]
+                                        .tolist(),
+            }
+
+        # 把记录函数注册到 DataLogger，之后每个物理步都会回调
+        data_logger.add_data_frame_logging_func(frame_logging_func)
+    
+    # 根据 val 决定开始或暂停记录
+    if val:
+        data_logger.start()   # 开始数据记录
+    else:
+        data_logger.pause()   # 暂停数据记录
+    return
+
+```
+
+初始化数据格式为字典，里面的每个值都是一个list
+
+|字段|含义|
+|---|---|
+|`joint_positions`|机器人各关节当前实际位置|
+|`applied_joint_positions`|当步控制器想要施加的关节位置（目标值）|
+|`target_position`|目标物体在世界坐标系下的 XYZ 位置|
+
+把格式化函数注册回调：
+
+```python
+data_logger.add_data_frame_logging_func(frame_logging_func)
+```
+
+
+----
+
+日志存储：
+
+```python
+def _on_save_data_event(self, log_path):
+    # 获取当前仿真世界对象
+    world = self.get_world()
+    # DataLogger 对象在 World 中默认已定义
+    data_logger = world.get_data_logger()
+
+    # 将已收集的数据保存到指定的 JSON 文件
+    data_logger.save(log_path=log_path)
+
+    # 重置 DataLogger 内部状态，方便后续重新开始一次新的数据记录
+    data_logger.reset()
+    return
+
+```
+
+
+---
+
+### 加载数据并回放
+
+`仅回放franka`
+
+```python
+async def _on_replay_trajectory_event_async(self, data_file):
+    # 从json文件加载数据
+    self._data_logger.load(log_path=data_file)
+    world = self.get_world()
+    await world.play_async()
+    # 添加物理回调函数，用于在每一帧设置关节目标
+    world.add_physics_callback("replay_trajectory", 
+							    self._on_replay_trajectory_step)
+    return
+
+def _on_replay_trajectory_step(self, step_size):
+    if self._world.current_time_step_index < self._data_logger.get_num_of_data_frames():
+        # 同步时间步并获取同一时间步的数据帧
+        data_frame = self._data_logger.get_data_frame(
+        data_frame_index=self._world.current_time_step_index)
+        # 将记录的动作应用到关节控制器
+        self._articulation_controller.apply_action(
+  ArticulationAction(
+  joint_positions=data_frame.data["applied_joint_positions"])
+        )
+    return
+```
+
+
+`回放场景`
+
+```python
+def _on_replay_scene_step(self, step_size):
+    # 判断是否还有数据帧未回放，防止越界
+    if self._world.current_time_step_index < self._data_logger.get_num_of_data_frames():
+        # 获取目标物体的名称
+        target_name = self._task_params["target_name"]["value"]
+
+        # 获取当前时间步对应的数据帧
+        data_frame = self._data_logger.get_data_frame(
+            data_frame_index=self._world.current_time_step_index
+        )
+
+        # 下发关节目标到控制器，模拟重放记录的动作
+        self._articulation_controller.apply_action(
+            ArticulationAction(joint_positions=data_frame.data["applied_joint_positions"])
+        )
+
+        # 将目标物体的位置设置为数据记录中的目标位置（世界坐标系）
+        self._world.scene.get_object(target_name).set_world_pose(
+            position=np.array(data_frame.data["target_position"])
+        )
+
+    return
+
+```
+
+相比于仅回放机械臂franka，增加了对目标物体位置的回放。
+
+
+
+# 场景设置
+
+以下脚本只能在默认的新 Stage 上运行一次。你可以先通过 **File → New** 创建一个新 Stage，然后在 **Window → Script Editor** 中运行这些脚本进行尝试。
+
+### 添加物体
+下面的代码片段将具有给定属性的`立方体`和一个`地平面`添加到场景中。
+```python
+import numpy as np
+from isaacsim.core.api.objects import DynamicCuboid
+from isaacsim.core.api.objects.ground_plane import GroundPlane
+from isaacsim.core.api.physics_context import PhysicsContext
+
+# 创建物理上下文：负责初始化物理引擎并开始步进
+PhysicsContext()
+
+# 在 /World 下添加一个地面平面
+GroundPlane(
+    prim_path="/World/groundPlane",  # Stage 路径
+    size=10,                         # 边长 10 m 的正方形
+    color=np.array([0.5, 0.5, 0.5])  # 中性灰
+)
+
+# 在 /World 下添加一个可动态碰撞的立方体
+DynamicCuboid(
+    prim_path="/World/cube",         # Stage 路径
+    position=np.array([-0.5, -0.2, 1.0]),  # 初始位置 (x, y, z)，单位米
+    scale=np.array([0.5, 0.5, 0.5]),       # 长宽高各 0.5 m
+    color=np.array([0.2, 0.3, 0.0])        # 深绿色
+)
+
+```
+
+在 Isaac Sim 脚本里简单地写一句 `PhysicsContext()` 就相当于**初始化／启动 PhysX 物理引擎并为当前 Stage 建立一个物理上下文**（physics scene）。如果场景里已经有物理上下文，这句话会直接返回现成的实例；如果还没有，它就会自动创建并把 PhysX 插件加载进来。
+
+#### PhysX的功能
+
+| 功能              | 具体作用                                                            | 与机器人仿真的关系                                              |
+| --------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
+| **刚体动力学**       | 计算物体在重力、外力、关节约束下的 6 DoF 运动；处理质量、惯性、线性/角速度等                      | 让机械臂、移动平台、掉落的方块等都能按真实物理运动                              |
+| **碰撞检测 & 解析**   | 精确检测几何体接触并计算接触点、法向力、摩擦                                          | 评估抓手与物体接触、箱子堆叠、机器人撞墙等                                  |
+| **关节/铰链约束**     | Revolute、Prismatic、Spherical、Fixed 以及复杂的 **Articulation**（多体系统） | Isaac Sim 的 Franka、UR10 等机械臂就是用 PhysX Articulation 建模的 |
+| **连续碰撞 (CCD)**  | 避免高速小物体「穿透」                                                     | 让快速甩动的夹爪不穿过薄板                                          |
+| **软体/粒子（扩展组件）** | Cloth、流体、Digitial Twins                                         | 某些版本支持柔体或颗粒，用于袋装、倒液体等场景                                |
+| **GPU 加速**      | 在支持的显卡上用 CUDA 计算刚体和碰撞，大幅提升大规模场景性能                               | Isaac Sim 可选 “GPU PhysX”，一次模拟上千物体仍保持实时                 |
+
+---
+### 视图对象  
+此扩展中的视图类是相似图元的集合。视图类以向量化方式操作底层对象。大多数视图API要求在使用前初始化世界和物理模拟。这可以通过将视图类添加到世界的场景并按如下方式重置世界来实现。
+
+```python
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import RigidPrim
+from isaacsim.core.api.objects import DynamicCuboid
+
+# 1) 创建一个全新的 World（含 PhysX 场景、时间步管理等）
+world = World()
+
+# 2) 在 /World/cube_0 路径下生成一个可动态碰撞的立方体
+cube = DynamicCuboid(prim_path="/World/cube_0")
+
+# 3) 定义一个 RigidPrim 视图：
+#    prim_paths_expr 接收正则/通配符表达式，
+#    这里匹配 /World/cube_0、/World/cube_1 … /World/cube_100 共 101 个潜在物体
+rigid_prim = RigidPrim(prim_paths_expr="/World/cube_[0-100]")
+
+# 4) 把视图对象添加进场景管理器（Scene）
+world.scene.add(rigid_prim)
+
+# 5) 重置 World ：
+#    - 把 USD 里的 Prim 实例化到物理场景
+#    - 为每个 view 绑定 PhysX 句柄
+#    - 刷新缓存（数量、索引、内存指针等）
+world.reset()
+
+# 6) 至此，rigid_prim 已完成初始化，可直接调用如下接口
+# poses = rigid_prim.get_world_poses()       # 获取所有匹配刚体的世界位姿
+# masses = rigid_prim.get_masses()           # 获取质量
+
+```
+
+为什么 **`world.reset()`** 后视图才能用？
+
+| 阶段                                 | View 内部状态                                                                                                       | 说明                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **创建 View（第 3 步）**                 | 只记录「表达式」和对 Scene 的引用；**尚未**扫描 Stage，也没有 PhysX 句柄。                                                               |                                                                         |
+| **`world.scene.add(view)`（第 4 步）** | 把 View 放进一个待“刷新列表”。但是物体还没真正生成，View 也不会去初始化。                                                                     |                                                                         |
+| **`world.reset()`**                | - 加载/实例化所有 Prim → 生成对应 PhysX Actor  <br>‑ 遍历 Scene 中所有 View，对照表达式找到匹配 Prim 并缓存  <br>‑ 建立 GPU/CPU 内存映射，准备批量查询/写入 | View 完整初始化后，才有 `get_world_poses()`、`set_linear_velocities()` 等高效批量 API。 |
+
+
+如果在 **Isaac Sim Python 脚本** 中运行，上述方法有效。但如果通过 **窗口 -> 脚本编辑器 (Window -> Script Editor)** 运行代码片段，则需要使用 **异步版本** 的 `reset`，如下所示：
+
+
+```python
+import asyncio
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import RigidPrim
+from isaacsim.core.api.objects import DynamicCuboid
+
+async def init():
+    # 如果存在World实例则清除
+    if World.instance():
+        World.instance().clear_instance()
+    world = World()
+    # 初始化模拟环境
+    await world.initialize_simulation_context_async()
+    # 添加默认地平面
+    world.scene.add_default_ground_plane(z_position=-1.0)
+    # 创建立方体对象
+    cube = DynamicCuboid(prim_path="/World/cube_0")
+    # 创建刚体prim，匹配路径表达式
+    rigid_prim = RigidPrim(prim_paths_expr="/World/cube_[0-100]")
+    # 视图类在添加到场景且世界重置时会内部初始化
+    world.scene.add(rigid_prim)
+    # 重置世界
+    await world.reset_async()
+    # rigid_prim现在已完成初始化可以使用
+
+# 异步运行初始化函数
+asyncio.ensure_future(init())
+```
+
+***为什么要这样做？
+
+- **如果你把脚本作为独立的 Isaac Sim Python 启动文件执行**（例如 `./isaac-sim.sh standalone_examples/my_script.py`），脚本里用普通的同步 `world.reset()` 就可以正常工作。
+    
+- **但如果你在 Isaac Sim 图形界面的 Window → Script Editor 里直接粘贴并运行代码片段**，因为 UI 线程已经在运行自己的事件循环，为了避免阻塞界面，你必须改用 **异步版本的 `reset_async()`**，并在前面加 `await`。
+原因是 Script Editor 里的代码会在 Omniverse 的主协程环境中执行，若调用同步的 `reset()` 会阻塞渲染和输入；用异步版本则让出控制权，保证界面流畅。
+
+
+
+### 创建 RigidPrim  
+以下代码片段向场景中添加三个立方体，并创建一个 RigidPrim（原名为 RigidPrimView）来批量操作它们
+
+```python
+import asyncio
+import numpy as np
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import RigidPrim
+from isaacsim.core.api.objects import DynamicCuboid
+
+async def example():
+    # 检查是否存在World实例，存在则清除
+    if World.instance():
+        World.instance().clear_instance()
+    
+    # 创建新的World实例
+    world = World()
+    # 异步初始化模拟环境
+    await world.initialize_simulation_context_async()
+    # 添加默认地平面，z轴位置为-1.0
+    world.scene.add_default_ground_plane(z_position=-1.0)
+
+    # 创建3个刚体立方体
+    for i in range(3):
+        # 在指定路径下创建立方体，路径格式为"/World/cube_0"到"/World/cube_2"
+        DynamicCuboid(prim_path=f"/World/cube_{i}")
+
+    # 创建视图对象用于批量操作立方体
+    # 使用正则表达式匹配路径"/World/cube_0"到"/World/cube_2"
+    rigid_prim = RigidPrim(prim_paths_expr="/World/cube_[0-2]")
+    # 将刚体prim添加到场景中
+    world.scene.add(rigid_prim)
+    # 异步重置世界，完成初始化
+    await world.reset_async()
+    
+    # 设置刚体的世界位姿
+    # 使用numpy数组指定三个立方体的位置坐标：
+    # 第一个立方体在(0, 0, 2)
+    # 第二个立方体在(0, -2, 2) 
+    # 第三个立方体在(0, 2, 2)
+    rigid_prim.set_world_poses(positions=np.array([[0, 0, 2], [0, -2, 2], [0, 2, 2]]))
+
+# 异步运行示例函数
+asyncio.ensure_future(example())
+```
+
+
+这段脚本演示了 **如何批量创建多个刚体立方体，然后用 `RigidPrim` 视图一次性设置它们的世界位姿**。核心流程与之前的示例类似，但这里通过 `set_world_poses()` 把 3 个方块一次性移动到空中（ z = 2 m），随后它们会因重力自由下落。
+
+
+
+### 创建RigidContactView
+在物理仿真中，有时需要监测两种重要的力学数据：
+
+1. 每个刚体受到的合力（所有接触力的矢量和）
+    
+2. 特定刚体之间的相互作用力
+    
+
+这些功能可以通过RigidPrim管理的RigidContactView工具来实现。
+
+
+```python
+import asyncio
+import numpy as np
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import RigidPrim
+from isaacsim.core.api.objects import DynamicCuboid
+
+async def example():
+    # 检查并清除现有的World实例
+    if World.instance():
+        World.instance().clear_instance()
+    
+    # 创建新的World实例并初始化模拟环境
+    world = World()
+    await world.initialize_simulation_context_async()
+    # 添加默认地平面
+    world.scene.add_default_ground_plane()
+
+    # 创建3组上下堆叠的刚体立方体
+    for i in range(3):
+        # 创建底部立方体（红色，边长2，质量1.0）
+        DynamicCuboid(
+            prim_path=f"/World/bottom_box_{i+1}", 
+            size=2, 
+            color=np.array([0.5, 0, 0]),  # RGB红色
+            mass=1.0
+        )
+        # 创建顶部立方体（蓝色，边长2，质量1.0）
+        DynamicCuboid(
+            prim_path=f"/World/top_box_{i+1}", 
+            size=2, 
+            color=np.array([0, 0, 0.5]),  # RGB蓝色
+            mass=1.0
+        )
+
+    # 创建底部立方体的RigidPrim视图
+    # 设置接触过滤器仅检测与顶部立方体的接触
+    bottom_box = RigidPrim(
+        prim_paths_expr="/World/bottom_box_*",  # 匹配所有底部立方体
+        name="bottom_box",
+        positions=np.array([
+            [0, 0, 1.0],     # 第一个立方体位置（中心）
+            [-5.0, 0, 1.0],  # 第二个立方体位置（左侧）
+            [5.0, 0, 1.0]    # 第三个立方体位置（右侧）
+        ]),
+        contact_filter_prim_paths_expr=["/World/top_box_*"],  # 设置接触过滤器
+        #只保留和top_box_*相关的接触到矩阵中
+    )
+
+    # 创建顶部立方体的RigidPrim视图
+    # 启用接触力追踪功能
+    top_box = RigidPrim(
+        prim_paths_expr="/World/top_box_*",  # 匹配所有顶部立方体
+        name="top_box",
+        positions=np.array([
+            [0.0, 0, 3.0],    # 第一个立方体位置（中心上方）
+            [-5.0, 0, 3.0],   # 第二个立方体位置（左侧上方）
+            [5.0, 0, 3.0]     # 第三个立方体位置（右侧上方）
+        ]),
+        track_contact_forces=True,  # 启用接触力追踪
+    )
+
+    # 将视图对象添加到场景中
+    world.scene.add(top_box)
+    world.scene.add(bottom_box)
+    # 重置模拟世界
+    await world.reset_async()
+
+    # 打印底部立方体受到的净接触力
+    print("底部立方体净接触力:", bottom_box.get_net_contact_forces())
+    # 打印顶部与底部立方体之间的接触力矩阵
+    print("接触力矩阵:", bottom_box.get_contact_force_matrix())
+
+# 异步运行示例
+asyncio.ensure_future(example())
+```
+
+##### 1. `prim_paths_expr="/World/bottom_box_*"` —— `*` 能匹配什么？
+
+`prim_paths_expr` 接收 **USD 路径的“通配/正则表达式”**，用来告诉 `RigidPrim` 要把哪些 Prim 收进视图。  
+Isaac Sim 在底层用 **Omni.Kit 的 WildcardMatching**（近似 shell‑style 通配）+ 少量正则扩展 来解析：
+
+|写法|含义|示例会匹配|
+|---|---|---|
+|`*`|任意长度、任意字符（包括 `/` 之外的所有可见字符）|`/World/cubeA`、`/World/cube_123`|
+|`?`|任意单个字符|`/World/cube_1`、`/World/cube_a`|
+|`[a‑z]`|字符集合|`[0‑2]` 匹配 `0`,`1`,`2`|
+|`[!…]`|取反集合|`[!0‑9]` 匹配非数字|
+|`{foo,bar}`|“或” 选择|`/World/{box,sphere}_*`|
+|末尾 `/**`|递归匹配子路径|`/World/Robot/**` 匹配 Robot 下所有层级|
+
+##### 2. `contact_filter_prim_paths_expr=["/World/top_box_*"]` —— 过滤器做什么？
+
+- **目的**：让 `RigidPrim` 在 **查询接触/碰撞信息** 时 **只关心与这些表达式匹配的对象**。
+    
+    - `get_contact_force_matrix()` 生成的矩阵就只列出 “bottom_box_* ↔ top_box_*” 之间的力；与地面或其它物体的接触会被过滤掉（仍参与物理求解，只是不会计入“我要统计的结果”）。
+
+
+
+##### 3. `track_contact_forces=True` —— 为什么要开？
+
+- **开关作用**：告诉 PhysX/Isaac Sim **在解算器里累积并存储本视图相关的接触力数据**。
+    
+- **关闭时（默认 False）**：
+    
+    - 模拟仍然计算碰撞、施加约束，但 **`get_net_contact_forces()` / `get_contact_force_matrix()` 会直接返回全零**。
+        
+    - 这样可以节约 GPU/CPU 复制带宽，对没有力反馈需求的大规模场景更高效。
+        
+- **开启后**：
+    
+    1. 每物理步（`world.step()`）都会把该刚体受到的 **每个接触点力向量** 汇总成：
+        
+        - **净接触力**（fx, fy, fz）
+            
+        - **逐对矩阵**：bottom_i ← top_j 产生的力
+            
+    2. 这些结果在 **下一帧** 通过视图 API 读取。
+---
+
+
+关于摩擦力和接触力的更详细信息可以分别通过 **get_friction_data** 和 **get_contact_force_data** 接口获取。这些API能够提供传感器基元（sensor prims）与过滤基元（filter prims）之间的所有接触力及接触点数据。其中，**get_contact_force_data** 还可返回接触距离和接触法线向量。
+
+#### 示例说明
+
+在以下示例中，我们向场景添加了三个立方体，并对每个立方体施加大小为10的切向力。随后，通过上述API获取所有接触信息，并汇总各接触点的数据，最终计算出立方体与地平面之间的摩擦力/法向力。
+
+
+```python
+import asyncio
+import numpy as np
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import RigidPrim
+from isaacsim.core.api.objects import DynamicCuboid
+from isaacsim.core.api.materials.physics_material import PhysicsMaterial
+from isaacsim.core.utils.stage import create_new_stage_async, update_stage_async
+
+async def contact_force_example():
+    # 设置重力加速度值
+    g = 10  
+    # 创建新的场景舞台
+    await create_new_stage_async()
+    
+    # 清理现有World实例（如果存在）
+    if World.instance():
+        World.instance().clear_instance()
+    
+    # 初始化World和地面
+    world = World()
+    world.scene.add_default_ground_plane()
+    await world.initialize_simulation_context_async()
+    
+    # 创建物理材质（摩擦系数设为0.5）
+    material = PhysicsMaterial(
+        prim_path="/World/PhysicsMaterials",
+        static_friction=0.5,  # 静摩擦系数
+        dynamic_friction=0.5  # 动摩擦系数
+    )
+    
+    # 创建3个蓝色立方体并应用物理材质
+    for i in range(3):
+        DynamicCuboid(
+            prim_path=f"/World/Box_{i+1}", 
+            size=2,  # 立方体尺寸
+            color=np.array([0, 0, 0.5]),  # 蓝色
+            mass=1.0  # 质量1.0
+        ).apply_physics_material(material)
+
+    # 创建RigidPrim视图用于获取接触力信息
+    # 设置关注立方体与地面之间的接触（最多30个接触点）
+    box_view = RigidPrim(
+        prim_paths_expr="/World/Box_*",  # 匹配所有立方体
+        positions=np.array([
+            [0, 0, 1.0],    # 中间立方体
+            [-5.0, 0, 1.0], # 左侧立方体
+            [5.0, 0, 1.0]   # 右侧立方体
+        ]),
+        contact_filter_prim_paths_expr=["/World/defaultGroundPlane/GroundPlane/CollisionPlane"],  # 只检测与地面的接触
+        max_contact_count=3 * 10  # 每个立方体最多10个接触点
+    )
+
+    # 添加视图到场景并重置世界
+    world.scene.add(box_view)
+    await world.reset_async()
+
+    # 施加外力（X轴方向）
+    forces = np.array([[g, 0, 0], [g, 0, 0], [g, 0, 0]])
+    box_view.apply_forces(forces)
+    await update_stage_async()
+
+    # 获取摩擦力和接触力数据（时间步长1/60秒）
+    # 切向摩擦力数据
+    friction_forces, friction_points, friction_pair_contacts_count, friction_pair_contacts_start_indices = box_view.get_friction_data(dt=1/60)
+    # 法向接触力数据
+    forces, points, normals, distances, pair_contacts_count, pair_contacts_start_indices = box_view.get_contact_force_data(dt=1/60)
+    
+    # 初始化聚合矩阵
+    force_aggregate = np.zeros((box_view._contact_view.num_shapes, box_view._contact_view.num_filters, 3))
+    friction_force_aggregate = np.zeros((box_view._contact_view.num_shapes, box_view._contact_view.num_filters, 3))
+
+    # 处理每对物体间的接触力
+    for i in range(pair_contacts_count.shape[0]):  # 遍历所有物体
+        for j in range(pair_contacts_count.shape[1]):  # 遍历所有过滤器
+            # 获取接触点索引和数量
+            start_idx = pair_contacts_start_indices[i, j]
+            friction_start_idx = friction_pair_contacts_start_indices[i, j]
+            count = pair_contacts_count[i, j]
+            friction_count = friction_pair_contacts_count[i, j]
+            
+            # 计算法向力聚合（点乘法向量）
+            pair_forces = forces[start_idx : start_idx + count]
+            pair_normals = normals[start_idx : start_idx + count]
+            force_aggregate[i, j] = np.sum(pair_forces * pair_normals, axis=0)
+            
+            # 计算切向摩擦力聚合
+            pair_forces = friction_forces[friction_start_idx : friction_start_idx + friction_count]
+            friction_force_aggregate[i, j] = np.sum(pair_forces, axis=0)
+
+    # 输出结果
+    print("摩擦力矩阵: \n", friction_force_aggregate)
+    print("接触力矩阵: \n", force_aggregate)
+    print("API获取的接触力矩阵: \n", box_view.get_contact_force_matrix(dt=1/60))
+    print("API获取的净接触力: \n", box_view.get_net_contact_forces(dt=1/60))
+
+# 异步运行示例
+asyncio.ensure_future(contact_force_example())
+```
+
+| 变量名                                      | 数据类型 / 典型 shape†       | 角色     | 说明                                                         |
+| ---------------------------------------- | ---------------------- | ------ | ---------------------------------------------------------- |
+| **friction_forces**                      | `np.ndarray (K_f, 3)`  | 原始摩擦数据 | 每个接触点的 **切向摩擦力向量** _(fx, fy, fz)_，已按 `dt` 换算成牛顿            |
+| **friction_points**                      | `np.ndarray (K_f, 3)`  | 原始摩擦数据 | 与 `friction_forces` 对应的接触点世界坐标                             |
+| **friction_pair_contacts_count**         | `np.ndarray (S, F)`    | 索引/计数  | 每个 _shape i_ ↔ _filter j_ 的摩擦接触点数量                         |
+| **friction_pair_contacts_start_indices** | `np.ndarray (S, F)`    | 索引/计数  | 上述摩擦点在一维数组 `friction_forces / friction_points` 中的 **起始索引** |
+| **forces**                               | `np.ndarray (K, 3)`    | 原始法向数据 | 每个接触点的 **总接触力向量**（含法向＋切向分量，但通常与法向同向）                       |
+| **points**                               | `np.ndarray (K, 3)`    | 原始法向数据 | 与 `forces` 对应的接触点世界坐标                                      |
+| **normals**                              | `np.ndarray (K, 3)`    | 原始法向数据 | 每点接触面的单位法向（shape→filter 方向）                                |
+| **distances**                            | `np.ndarray (K,)`      | 原始法向数据 | 穿透深度 (‑) 或分离距离 (+)                                         |
+| **pair_contacts_count**                  | `np.ndarray (S, F)`    | 索引/计数  | 每个 _shape i_ ↔ _filter j_ 的接触点数量                           |
+| **pair_contacts_start_indices**          | `np.ndarray (S, F)`    | 索引/计数  | 上述接触点在 `forces / points / normals` 一维数组中的起始索引              |
+| **force_aggregate**                      | `np.ndarray (S, F, 3)` | 聚合结果   | 对每对 (shape, filter) **沿法向分量求和** 后的总力                       |
+| **friction_force_aggregate**             | `np.ndarray (S, F, 3)` | 聚合结果   | 对每对 (shape, filter) **切向摩擦力向量求和**                          |
+
+
+
+
+### 设置网格物体的质量属性
+
+以下代码片段演示如何为物理对象设置质量参数（也可选择使用密度替代质量直接设定）：
+
+
+```python
+import omni
+from pxr import UsdPhysics
+from omni.physx.scripts import utils
+
+# 获取当前USD舞台(stage)对象
+stage = omni.usd.get_context().get_stage()
+
+# 执行命令创建一个立方体网格基元
+# prim_type指定为"Cube"表示创建立方体
+result, path = omni.kit.commands.execute(
+    "CreateMeshPrimCommand", 
+    prim_type="Cube"
+)
+
+# 获取刚创建的立方体prim对象
+cube_prim = stage.GetPrimAtPath(path)
+
+# 将立方体设置为刚体(RigidBody)
+# 使用convexHull碰撞形状，False表示不删除原有几何形状
+utils.setRigidBody(
+    cube_prim, 
+    "convexHull",  # 碰撞形状类型为凸包
+    False          # 保留原始几何形状
+)
+
+# 应用质量API到立方体prim
+mass_api = UsdPhysics.MassAPI.Apply(cube_prim)
+
+# 设置立方体的质量属性为10(单位:千克)
+mass_api.CreateMassAttr(10)
+
+# 或者可以设置密度属性(单位:kg/m³)
+# 注意：密度和质量只需设置一个，物理引擎会自动计算另一个
+mass_api.CreateDensityAttr(1000)  # 1000 kg/m³ 相当于水的密度
+```
+
+- 使用 Kit 命令系统（Command）来“可撤销”地操作场景。
+    
+- `"CreateMeshPrimCommand"`：内置命令，用于创建网格（Mesh）基元。
+    
+- `prim_type="Cube"`：指定生成的网格是立方体；执行后会在 Stage 根目录下生成一个 `/Cube` Prim（路径由 Kit 自动分配，保存在 `path` 变量中）。
+- `utils.setRigidBody(prim, shape, removeOrigGeom)`：工具函数封装了给 Prim 添加 USD Physics RigidBody API 和碰撞形状的逻辑。
+    
+- `"convexHull"`：碰撞几何体类型，凸包(Convex Hull) 更贴合原始网格外形且性能友好。
+    
+- `False`：表示**保留**原始渲染网格，不用碰撞网格替换它；若设为 `True`，则仅保留碰撞网格，去掉原始可视几何。
+
+
+
+### 获取网格的大小  
+
+下面的代码片段展示了如何获取网格的大小。
+
+```python
+import omni
+from pxr import Usd, UsdGeom, Gf
+
+# 获取当前USD舞台(stage)上下文
+stage = omni.usd.get_context().get_stage()
+
+# 创建一个圆锥体(Cone)网格基元
+# 使用CreateMeshPrimCommand命令，指定prim_type为"Cone"
+result, path = omni.kit.commands.execute(
+    "CreateMeshPrimCommand", 
+    prim_type="Cone"  # 创建圆锥体而非立方体
+)
+
+# 获取刚创建的圆锥体prim对象
+prim = stage.GetPrimAtPath(path)
+
+# 计算圆锥体的边界框(Bounding Box)
+# 1. 创建边界框缓存，使用默认时间码和包含默认用途(purpose)
+bbox_cache = UsdGeom.BBoxCache(
+    Usd.TimeCode.Default(),  # 使用默认时间码
+    includedPurposes=[UsdGeom.Tokens.default_]  # 包含默认用途的几何体
+)
+
+# 2. 清除缓存以确保计算最新结果
+bbox_cache.Clear()
+
+# 3. 计算圆锥体的世界空间边界框
+prim_bbox = bbox_cache.ComputeWorldBound(prim)
+
+# 4. 计算对齐的轴对齐边界框范围
+prim_range = prim_bbox.ComputeAlignedRange()
+
+# 5. 获取边界框尺寸(x,y,z长度)
+prim_size = prim_range.GetSize()
+
+# 打印圆锥体的尺寸信息
+# 注意：这是圆锥体边界框的尺寸，不是底面半径和高度
+print("圆锥体边界框尺寸:", prim_size)  # 输出格式: (宽度, 高度, 深度)
+```
+
+**`bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), includedPurposes=[UsdGeom.Tokens.default_])`**  
+构造一个 `BBoxCache` 实例，用于快速计算 Prim 的包围盒；
+
+- `Usd.TimeCode.Default()` 表示取默认时间（通常是动画的第 0 帧）。
+    
+- `includedPurposes=[UsdGeom.Tokens.default_]` 限定只计算“默认用途”的几何。
+
+
+
+
+
+
+### 为整个场景批量添加语义数据
+
+语义标签（Semantic Labels/Tags）是为物体或数据添加的**结构化描述信息**，用于赋予计算机可理解的**语义含义**。在仿真、机器人、计算机视觉等领域，它本质上是将原始数据（如3D模型、图像像素）与人类知识（如物体类别、功能属性）关联起来的桥梁。
+1. **算法训练与推理**
+    
+    - 在机器学习中，语义标签是监督学习的真值（Ground Truth），比如：
+        
+        - 计算机视觉模型通过像素级语义标签（如“道路”“行人”）学习图像分割。
+            
+        - 机器人通过物体语义标签（如“可抓取”“危险”）决策行为。
+          
+
+
+
+以下代码演示如何通过遍历场景层级（Stage），以编程方式为所有对象自动添加语义标签：
+
+```python
+import omni.usd
+from isaacsim.core.utils.semantics import add_update_semantics
+
+def remove_prefix(name, prefix):
+    """移除名称中的指定前缀
+    
+    Args:
+        name (str): 原始名称
+        prefix (str): 要移除的前缀
+        
+    Returns:
+        str: 移除前缀后的名称
+    """
+    if name.startswith(prefix):
+        return name[len(prefix):]
+    return name
+
+def remove_numerical_suffix(name):
+    """移除名称中的数字后缀
+    
+    Args:
+        name (str): 原始名称
+        
+    Returns:
+        str: 移除数字后缀后的名称
+        例如: "Chair_123" -> "Chair"
+    """
+    suffix = name.split("_")[-1]
+    if suffix.isnumeric():
+        return name[:-len(suffix)-1]  # 移除后缀和前面的下划线
+    return name
+
+def remove_underscores(name):
+    """移除名称中的所有下划线
+    
+    Args:
+        name (str): 原始名称
+        
+    Returns:
+        str: 移除下划线后的名称
+    """
+    return name.replace("_", "")
+
+# 获取当前USD舞台
+stage = omni.usd.get_context().get_stage()
+
+# 遍历舞台中的所有prim
+for prim in stage.Traverse():
+    # 只处理网格类型的prim
+    if prim.GetTypeName() == "Mesh":
+        # 获取prim路径的最后一部分作为原始标签
+        label = str(prim.GetPrimPath()).split("/")[-1]
+        
+        # 清理标签名称:
+        # 1. 移除"SM_"前缀(常见于导入的资产)
+        label = remove_prefix(label, "SM_")
+        # 2. 移除数字后缀(如"_123")
+        label = remove_numerical_suffix(label)
+        # 3. 移除所有下划线
+        label = remove_underscores(label)
+        
+        # 添加/更新语义标签
+        # semantic_label: 清理后的名称作为语义标签
+        # type_label: 固定为"class"表示分类标签
+        add_update_semantics(prim, semantic_label=label, type_label="class")
+```
+
+
+### 物理操作指南（Physics How-Tos）
+
+---
+
+***创建一个物理场景（Create A Physics Scene）
+
+```python
+import omni  # Omniverse USD 上下文接口
+from pxr import Gf, Sdf, UsdPhysics  # 引入基础向量、SDF 路径和物理场景 API
+
+# 获取当前 Stage
+stage = omni.usd.get_context().get_stage()
+
+# 在场景中定义并添加一个物理场景 Prim
+scene = UsdPhysics.Scene.Define(stage, Sdf.Path("/World/physicsScene"))
+# 设置重力方向向量（单位为世界坐标）
+scene.CreateGravityDirectionAttr().Set(Gf.Vec3f(0.0, 0.0, -1.0))
+# 设置重力大小（cm/s^2）
+scene.CreateGravityMagnitudeAttr().Set(981.0)
+```
+
+下面代码段展示了如何设置特定的物理选项，本例中启用了 CPU 物理并使用 TGS 求解器：
+
+
+```python
+from pxr import PhysxSchema  # 引入 PhysX 场景扩展 API
+
+# 将 PhysxSceneAPI 应用于刚才创建的物理场景
+PhysxSchema.PhysxSceneAPI.Apply(stage.GetPrimAtPath("/World/physicsScene"))
+# 获取对应的 API 对象
+physxSceneAPI = PhysxSchema.PhysxSceneAPI.Get(stage, "/World/physicsScene")
+# 启用连续碰撞检测（CCD）
+physxSceneAPI.CreateEnableCCDAttr(True)
+# 启用稳定化处理
+physxSceneAPI.CreateEnableStabilizationAttr(True)
+# 禁用 GPU 物理加速（使用 CPU）
+physxSceneAPI.CreateEnableGPUDynamicsAttr(False)
+# 设置广域检测类型为多箱体分层（MBP）
+physxSceneAPI.CreateBroadphaseTypeAttr("MBP")
+# 设置求解器类型为 TGS
+physxSceneAPI.CreateSolverTypeAttr("TGS")
+```
+
+***向场景添加地面（Adding a Ground Plane）
+
+```python
+import omni  # Omniverse USD 上下文接口
+from pxr import PhysicsSchemaTools, Gf  # 引入地面添加工具和向量类
+
+# 获取当前 Stage
+stage = omni.usd.get_context().get_stage()
+# 在 /World/groundPlane 路径下创建一个 Z 向上、边长 100 cm，Z 坐标为 -100 的平面
+PhysicsSchemaTools.addGroundPlane(
+    stage,                    # Stage 实例
+    "/World/groundPlane",   # Prim 路径
+    "Z",                     # 指定 Z 轴为向上方向
+    100,                      # 平面大小（cm）
+    Gf.Vec3f(0, 0, -100),     # 平面位置
+    Gf.Vec3f(1.0)             # 法线长度（1.0）
+)
+```
+
+---
+
+***为网格启用物理和碰撞（Enable Physics And Collision For a Mesh）
+
+_该脚本假设场景中已有一个物理场景。_
+
+```python
+import omni  # Omniverse USD 上下文接口
+from omni.physx.scripts import utils  # 引入 PhysX 实用函数
+
+# 在 Stage 中创建一个立方体网格
+stage = omni.usd.get_context().get_stage()
+result, path = omni.kit.commands.execute(
+    "CreateMeshPrimCommand",  # 创建网格 Prim 的命令
+    prim_type="Cube"          # 指定类型为 Cube
+)
+# 获取新创建的 Prim
+cube_prim = stage.GetPrimAtPath(path)
+# 启用刚体和碰撞，使用凸包近似；若需要更精确可改用 "convexDecomposition"
+utils.setRigidBody(cube_prim, "convexHull", False)
+```
+
+如需**更紧凑的碰撞近似**，请将最后一行改为：
+
+```python
+utils.setRigidBody(cube_prim, "convexDecomposition", False)
+```
+
+要验证碰撞网格是否启用，可点击界面右上角的“眼睛”图标 → “按类型显示” → “物理网格”，该模式下对象会以粉色轮廓显示其碰撞网格。
+
+---
+
+***遍历场景并为子节点分配碰撞（Traverse a Stage and Assign Collision Meshes to Children）
+
+```python
+import omni  # Omniverse USD 上下文接口
+from pxr import Usd, UsdGeom, Gf  # 引入基类、几何定义和向量
+from omni.physx.scripts import utils  # 引入 PhysX 实用函数
+
+stage = omni.usd.get_context().get_stage()
+
+# 辅助函数：在指定路径添加一个立方体
+def add_cube(stage, path, size: float = 10, offset: Gf.Vec3d = Gf.Vec3d(0, 0, 0)):
+    cubeGeom = UsdGeom.Cube.Define(stage, path)  # 定义立方体 Prim
+    cubeGeom.CreateSizeAttr(size)                # 设置立方体边长
+    cubeGeom.AddTranslateOp().Set(offset)        # 设置位置偏移
+
+# 以下示例用于演示：
+result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Torus")
+# 在 /World/Cube_0 路径下创建一个偏移 (100,100,0) 的立方体
+add_cube(stage, "/World/Cube_0", offset=Gf.Vec3d(100, 100, 0))
+# 在 /World/Nested/Cube 路径下创建一个嵌套偏移 (100,0,100) 的立方体
+add_cube(stage, "/World/Nested/Cube", offset=Gf.Vec3d(100, 0, 100))
+
+# 从根节点遍历所有 Prim
+curr_prim = stage.GetPrimAtPath("/")
+for prim in Usd.PrimRange(curr_prim):
+    # 如果是几何形状（柱体、胶囊、圆锥、球体、立方体）
+    if (
+        prim.IsA(UsdGeom.Cylinder)
+        or prim.IsA(UsdGeom.Capsule)
+        or prim.IsA(UsdGeom.Cone)
+        or prim.IsA(UsdGeom.Sphere)
+        or prim.IsA(UsdGeom.Cube)
+    ):
+        # 为常规模型使用凸包（convexHull）碰撞近似
+        utils.setCollider(prim, approximationShape="convexHull")
+    elif prim.IsA(UsdGeom.Mesh):
+        # 对网格 Prim 使用三角网格，或可选其他方式："convexDecomposition"、"boundingSphere"、"boundingCube"
+        utils.setCollider(prim, approximationShape="None")
+```
+
+---
+
+***执行重叠测试（Do Overlap Test）
+
+下面代码检测并报告对象是否与指定立方体/球体区域重叠。假设场景已有物理场景，且所有对象均已启用碰撞网格，且已点击播放按钮。
+
+参数说明：`extent`、`origin` 和 `rotation`（或 `origin` 和 `radius`）定义了要检测的立方体/球体区域。PhysX 查询将返回重叠对象的数量。
+
+```python
+import carb  # 核心日志与基础类型
+import omni
+import omni.physx
+from omni.physx import get_physx_scene_query_interface  # 引入场景查询接口
+from pxr import UsdGeom, Gf, Vt  # 几何类型、向量类型和数组类型
+
+# 碰撞命中回调：将命中对象显示为红色
+def report_hit(hit):
+    hitColor = Vt.Vec3fArray([Gf.Vec3f(180.0/255.0, 16.0/255.0, 0.0)])  # 红色
+    usdGeom = UsdGeom.Mesh.Get(omni.usd.get_context().get_stage(), hit.rigid_body)
+    usdGeom.GetDisplayColorAttr().Set(hitColor)
+    return True
+
+# 执行重叠测试
+def check_overlap():
+    extent = carb.Float3(20.0, 20.0, 20.0)          # 立方体半尺寸
+    origin = carb.Float3(0.0, 0.0, 0.0)              # 中心点
+    rotation = carb.Float4(0.0, 0.0, 1.0, 0.0)       # 旋转四元数
+    # 立方体区域重叠测试，返回命中数量
+    numHits = get_physx_scene_query_interface().overlap_box(extent, origin, rotation, report_hit, False)
+    # 球体区域重叠测试：
+    # numHits = get_physx_scene_query_interface().overlap_sphere(radius, origin, report_hit, False)
+    return numHits > 0  # 有命中返回 True
+```
+
+---
+
+***执行射线测试（Do Raycast Test）
+
+下面代码检测射线与场景对象的最近交点。假设场景已有物理场景，且碰撞网格已启用，并已点击播放按钮。
+
+参数说明：`origin`、`rayDir` 和 `distance` 定义了射线起点、方向和长度。查询结果包含命中对象引用及距离信息。
+
+```python
+import carb
+import omni
+import omni.physx
+from omni.physx import get_physx_scene_query_interface  # 场景查询接口
+from pxr import UsdGeom, Vt, Gf
+
+# 射线测试函数
+def check_raycast():
+    origin = carb.Float3(0.0, 0.0, 0.0)        # 射线起点
+    rayDir = carb.Float3(1.0, 0.0, 0.0)        # 射线方向
+    distance = 100.0                          # 射线长度（cm）
+    # 执行最接近命中测试
+    hit = get_physx_scene_query_interface().raycast_closest(origin, rayDir, distance)
+    if hit["hit"]:
+        # 命中时将对象变为黄色，并获取距离
+        usdGeom = UsdGeom.Mesh.Get(omni.usd.get_context().get_stage(), hit["rigidBody"])
+        hitColor = Vt.Vec3fArray([Gf.Vec3f(1.0, 1.0, 0.0)])  # 黄
+        usdGeom.GetDisplayColorAttr().Set(hitColor)
+        distance = hit["distance"]
+        return usdGeom.GetPath().pathString, distance
+    return None, 10000.0
+
+print(check_raycast())  # 示例打印结果
+```
+
+---
+
+### USD 操作指南（USD How-Tos）
+
+---
+
+***创建、修改和分配材质（Creating, Modifying, Assigning Materials）
+
+```python
+import omni
+from pxr import UsdShade, Sdf, Gf  # 引入材质 API、SDF 路径和向量
+
+mtl_created_list = []  # 存放新建材质的路径列表
+# 从库中创建并绑定 MDL 材质，示例使用 OmniGlass.mdl
+omni.kit.commands.execute(
+    "CreateAndBindMdlMaterialFromLibrary",
+    mdl_name="OmniGlass.mdl",  # MDL 文件名
+    mtl_name="OmniGlass",      # 材质名称
+    mtl_created_list=mtl_created_list,
+)
+# 获取新创建材质的 Prim
+stage = omni.usd.get_context().get_stage()
+mtl_prim = stage.GetPrimAtPath(mtl_created_list[0])
+# 设置材质参数（可在 .mdl 文件或 Stage 详情面板查看参数名称）
+omni.usd.create_material_input(mtl_prim, "glass_color", Gf.Vec3f(0, 1, 0), Sdf.ValueTypeNames.Color3f)
+omni.usd.create_material_input(mtl_prim, "glass_ior", 1.0, Sdf.ValueTypeNames.Float)
+# 创建一个立方体并绑定材质
+result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+cube_prim = stage.GetPrimAtPath(path)
+cube_mat_shade = UsdShade.Material(mtl_prim)
+UsdShade.MaterialBindingAPI(cube_prim).Bind(cube_mat_shade, UsdShade.Tokens.strongerThanDescendants)
+```
+
+---
+
+***给材质分配纹理（Assigning a Texture to a Material）
+
+```python
+import omni
+import carb  # 配置读取
+from pxr import UsdShade, Sdf
+
+# 获取默认 Nucleus 服务器路径（可根据配置调整）
+default_server = carb.settings.get_settings().get("/persistent/isaac/asset_root/default")
+mtl_created_list = []
+# 创建并绑定 OmniPBR.mdl 材质
+omni.kit.commands.execute(
+    "CreateAndBindMdlMaterialFromLibrary",
+    mdl_name="OmniPBR.mdl",
+    mtl_name="OmniPBR",
+    mtl_created_list=mtl_created_list,
+)
+stage = omni.usd.get_context().get_stage()
+mtl_prim = stage.GetPrimAtPath(mtl_created_list[0])
+# 设置纹理贴图路径输入
+omni.usd.create_material_input(
+    mtl_prim,
+    "diffuse_texture",  # 参数名
+    default_server + "/Isaac/Samples/DR/Materials/Textures/marble_tile.png",
+    Sdf.ValueTypeNames.Asset
+)
+# 创建立方体并绑定材质
+result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+cube_prim = stage.GetPrimAtPath(path)
+cube_mat_shade = UsdShade.Material(mtl_prim)
+UsdShade.MaterialBindingAPI(cube_prim).Bind(cube_mat_shade, UsdShade.Tokens.strongerThanDescendants)
+```
+
+---
+
+***为 Prim 添加变换矩阵（Adding a Transform Matrix to a Prim）
+
+```python
+import omni
+from pxr import Gf, UsdGeom
+
+stage = omni.usd.get_context().get_stage()
+# 创建一个立方体
+result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+# 获取 Prim 并设置变换矩阵
+cube_prim = stage.GetPrimAtPath(path)
+xform = UsdGeom.Xformable(cube_prim)
+transform = xform.AddTransformOp()
+mat = Gf.Matrix4d()                  # 创建 4x4 变换矩阵
+mat.SetTranslateOnly(Gf.Vec3d(.10, 1, 1.5))  # 设置平移
+mat.SetRotateOnly(Gf.Rotation(Gf.Vec3d(0,1,0), 290))  # 设置绕 Y 轴旋转
+transform.Set(mat)  # 应用到 Prim
+```
+
+---
+
+***对齐两个 USD Prim（Align Two USD Prims）
+
+```python
+import omni
+from pxr import UsdGeom, Gf
+
+stage = omni.usd.get_context().get_stage()
+# 创建第一个立方体
+result, path_a = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+prim_a = stage.GetPrimAtPath(path_a)
+# 设置第一个立方体的变换
+xform = UsdGeom.Xformable(prim_a)
+transform = xform.AddTransformOp()
+mat = Gf.Matrix4d()
+mat.SetTranslateOnly(Gf.Vec3d(.10, 1, 1.5))
+mat.SetRotateOnly(Gf.Rotation(Gf.Vec3d(0, 1, 0), 290))
+transform.Set(mat)
+# 创建第二个立方体
+result, path_b = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+prim_b = stage.GetPrimAtPath(path_b)
+# 获取第一个立方体的世界变换矩阵
+pose = omni.usd.utils.get_world_transform_matrix(prim_a)
+# 清除第二个立方体的原有变换
+xform = UsdGeom.Xformable(prim_b)
+xform.ClearXformOpOrder()
+# 将第二个立方体对齐到第一个立方体的姿态
+xform_op = xform.AddXformOp(UsdGeom.XformOp.TypeTransform, UsdGeom.XformOp.PrecisionDouble, "")
+xform_op.Set(pose)
+```
+
+---
+
+***获取选定 Prim 在当前时间戳下的世界变换（Get World Transform At Current Timestamp For Selected Prims）
+
+```python
+import omni
+from pxr import UsdGeom, Gf
+
+usd_context = omni.usd.get_context()
+stage = usd_context.get_stage()
+
+#### 以下部分用于测试，可在已有选定 Prim 时移除
+result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+cube_prim = stage.GetPrimAtPath(path)
+xform = UsdGeom.Xformable(cube_prim)
+transform = xform.AddTransformOp()
+mat = Gf.Matrix4d()
+mat.SetTranslateOnly(Gf.Vec3d(.10, 1, 1.5))
+mat.SetRotateOnly(Gf.Rotation(Gf.Vec3d(0, 1, 0), 290))
+transform.Set(mat)
+omni.usd.get_context().get_selection().set_prim_path_selected(path, True, True, True, False)
+####
+
+# 获取所有选中的 Prim 路径列表
+selected_prims = usd_context.get_selection().get_selected_prim_paths()
+# 获取当前时间码（timecode）
+timeline = omni.timeline.get_timeline_interface()
+timecode = timeline.get_current_time() * timeline.get_time_codes_per_seconds()
+# 遍历并打印各 Prim 在该时间点的世界变换
+for s in selected_prims:
+    curr_prim = stage.GetPrimAtPath(s)
+    print("Selected", s)
+    pose = omni.usd.utils.get_world_transform_matrix(curr_prim, timecode)
+    print("Matrix Form:", pose)
+    print("Translation:", pose.ExtractTranslation())
+    q = pose.ExtractRotation().GetQuaternion()
+    print(
+        "Rotation:", q.GetReal(), ",",
+        q.GetImaginary()[0], ",",
+        q.GetImaginary()[1], ",",
+        q.GetImaginary()[2]
+    )
+```
+
+---
+
+***将当前 Stage 保存为 USD 文件（Save Current Stage to USD）
+
+```python
+import omni
+import carb  # 日志与配置
+
+# 示例：在场景中创建一个立方体 Prim
+result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cube")
+# 保存当前 Stage 到指定路径，可用于脚本生成后调试加载
+omni.usd.get_context().save_as_stage(
+    "/path/to/asset/saved.usd",  # 输出文件路径
+    None                          # 可选层配置
+)
+```
+
+
+
+---
+# 工具代码片段（Util Snippets）
+
+---
+
+***简单异步任务（Simple Async Task）
+
+```python
+import asyncio  # Python 异步库
+import omni     # Omniverse Kit 主模块
+
+# 异步任务：等待下一帧后暂停模拟
+async def pause_sim(task):
+    # 等待传入的任务完成
+    done, pending = await asyncio.wait({task})
+    if task in done:
+        print("等待到下一帧，暂停模拟")
+        # 调用时间线接口暂停播放
+        omni.timeline.get_timeline_interface().pause()
+
+# 开始播放模拟
+omni.timeline.get_timeline_interface().play()
+# 获取一个将在下一帧更新完成时完成的异步任务
+task = asyncio.ensure_future(omni.kit.app.get_app().next_update_async())
+# 启动 pause_sim 异步函数
+asyncio.ensure_future(pause_sim(task))
+```
+
+---
+
+***获取相机参数（Get Camera Parameters）
+
+下面脚本展示如何从当前视口获取相机参数。
+
+```python
+import omni
+from omni.syntheticdata import helpers  # 相机辅助工具
+import math  # 数学库
+
+# 获取当前 USD Stage
+stage = omni.usd.get_context().get_stage()
+# 获取活动视口 API
+viewport_api = omni.kit.viewport.utility.get_active_viewport()
+# 设置视口渲染分辨率，下次帧更新时生效
+viewport_api.set_texture_resolution((512, 512))
+# 获取实际分辨率
+(width, height) = viewport_api.get_texture_resolution()
+aspect_ratio = width / height  # 长宽比
+# 获取绑定到视口的相机 Prim
+camera = stage.GetPrimAtPath(viewport_api.get_active_camera())
+# 读取相机属性
+focal_length = camera.GetAttribute("focalLength").Get()         # 焦距
+horiz_aperture = camera.GetAttribute("horizontalAperture").Get()  # 水平光圈
+vert_aperture = camera.GetAttribute("verticalAperture").Get()    # 垂直光圈
+# 裁剪平面
+near, far = camera.GetAttribute("clippingRange").Get()
+# 视场角（弧度）
+fov = 2 * math.atan(horiz_aperture / (2 * focal_length))
+# 计算投影矩阵
+proj_mat = helpers.get_projection_matrix(fov, aspect_ratio, near, far)
+
+# 计算焦平面中心坐标（像素空间）
+focal_x = height * focal_length / vert_aperture
+focal_y = width * focal_length / horiz_aperture
+center_x = height * 0.5
+center_y = width * 0.5
+```
+
+---
+
+***渲染（Rendering）
+
+对于频繁更新大量几何体，有三种主要 API 可选择：
+
+- **UsdGeom.Points**：适用于渲染大量点（与渲染器交互）
+    
+- **UsdGeom.PointInstancer**：适用于具有物理交互且需要实例化的几何体
+    
+- **DebugDraw**：仅用于可视化，不参与渲染或物理，性能最高
+    
+
+下面分别展示示例。
+
+***UsdGeom.Points
+
+```python
+import random
+import omni.usd
+from pxr import UsdGeom
+
+class Example():
+    def create(self):
+        N = 500  # 点数量
+        # 随机生成点位置列表
+        self.point_list = [(
+            random.uniform(-2.0, 2.0),
+            random.uniform(-0.1, 0.1),
+            random.uniform(-1.0, 1.0)
+        ) for _ in range(N)]
+        # 点大小
+        self.sizes = [0.05 for _ in range(N)]
+
+        points_path = "/World/Points"
+        stage = omni.usd.get_context().get_stage()
+        # 定义 Points API
+        self.points = UsdGeom.Points.Define(stage, points_path)
+        # 设置点坐标和大小
+        self.points.CreatePointsAttr().Set(self.point_list)
+        self.points.CreateWidthsAttr().Set(self.sizes)
+        # 设置统一颜色
+        self.points.CreateDisplayColorPrimvar("constant").Set([(1, 0, 1)])
+
+    def update(self):
+        # 更新点位置
+        for i in range(len(self.point_list)):
+            self.point_list[i] = (
+                random.uniform(-2.0, 2.0),
+                random.uniform(-0.1, 0.1),
+                random.uniform(-1.0, 1.0)
+            )
+        # 应用更新
+        self.points.GetPointsAttr().Set(self.point_list)
+
+import asyncio
+import omni
+example = Example()
+example.create()
+
+async def update_points():
+    # 循环 10 次，每次等待 10 帧
+    for _ in range(10):
+        for _ in range(10):
+            await omni.kit.app.get_app().next_update_async()
+        example.update()
+
+asyncio.ensure_future(update_points())
+```
+
+---
+
+***UsdGeom.PointInstancer
+
+```python
+import random
+import omni.usd
+from pxr import UsdGeom, Gf
+
+class Example():
+    def create(self):
+        N = 500
+        scale = 0.05  # 缩放因子
+        # 随机位置、颜色、缩放列表
+        self.point_list = [(
+            random.uniform(-2.0, 2.0),
+            random.uniform(-0.1, 0.1),
+            random.uniform(-1.0, 1.0)
+        ) for _ in range(N)]
+        self.colors = [(1, 1, 1, 1) for _ in range(N)]
+        self.sizes = [(1.0, 1.0, 1.0) for _ in range(N)]
+
+        stage = omni.usd.get_context().get_stage()
+        # 定义要实例化的原型立方体
+        cube_path = "/World/Cube"
+        cube = UsdGeom.Cube(stage.DefinePrim(cube_path, "Cube"))
+        cube.AddScaleOp().Set(Gf.Vec3d(1, 1, 1) * scale)
+        cube.CreateDisplayColorPrimvar().Set([(0, 1, 1)])
+
+        # 定义 PointInstancer
+        instance_path = "/World/PointInstancer"
+        self.point_instancer = UsdGeom.PointInstancer(
+            stage.DefinePrim(instance_path, "PointInstancer")
+        )
+        # 设置实例位置
+        self.positions_attr = self.point_instancer.CreatePositionsAttr()
+        self.positions_attr.Set(self.point_list)
+        # 设置缩放
+        self.scale_attr = self.point_instancer.CreateScalesAttr()
+        self.scale_attr.Set(self.sizes)
+        # 指向原型几何
+        self.point_instancer.CreatePrototypesRel().SetTargets([cube.GetPath()])
+        # 所有实例都使用原型索引 0
+        self.proto_indices_attr = self.point_instancer.CreateProtoIndicesAttr()
+        self.proto_indices_attr.Set([0] * len(self.point_list))
+
+    def update(self):
+        # 更新位置列表
+        for i in range(len(self.point_list)):
+            self.point_list[i] = (
+                random.uniform(-2.0, 2.0),
+                random.uniform(-0.1, 0.1),
+                random.uniform(-1.0, 1.0)
+            )
+        # 应用更新
+        self.positions_attr.Set(self.point_list)
+
+import asyncio
+import omni
+example = Example()
+example.create()
+
+async def update_points():
+    for _ in range(10):
+        for _ in range(10):
+            await omni.kit.app.get_app().next_update_async()
+        example.update()
+
+asyncio.ensure_future(update_points())
+```
+
+---
+
+***DebugDraw（调试绘制）
+
+```python
+import random
+from isaacsim.util.debug_draw import _debug_draw  # 调试绘制接口
+
+class Example():
+    def create(self):
+        # 获取调试绘制接口
+        self.draw = _debug_draw.acquire_debug_draw_interface()
+        N = 500
+        # 随机生成点位置、颜色、大小列表
+        self.point_list = [(
+            random.uniform(-2.0, 2.0),
+            random.uniform(-0.1, 0.1),
+            random.uniform(-1.0, 1.0)
+        ) for _ in range(N)]
+        self.color_list = [(
+            random.uniform(0, 1),
+            random.uniform(0, 1),
+            random.uniform(0, 1),
+            1
+        ) for _ in range(N)]
+        self.size_list = [10.0 for _ in range(N)]
+
+    def update(self):
+        # 更新点位置列表
+        for i in range(len(self.point_list)):
+            self.point_list[i] = (
+                random.uniform(-2.0, 2.0),
+                random.uniform(-0.1, 0.1),
+                random.uniform(-1.0, 1.0)
+            )
+        # 清空并绘制新点
+        self.draw.clear_points()
+        self.draw.draw_points(self.point_list, self.color_list, self.size_list)
+
+import asyncio
+import omni
+example = Example()
+example.create()
+
+async def update_points():
+    for _ in range(10):
+        for _ in range(10):
+            await omni.kit.app.get_app().next_update_async()
+        example.update()
+
+asyncio.ensure_future(update_points())
+```
+
+---
+
+***渲染帧延迟（Rendering Frame Delay）
+
+默认渲染管线允许最多 3 帧"在途"，以提高 FPS，但可能导致渲染结果滞后。
+
+若需零延迟（渲染数据与最新模拟状态同步），请使用以下体验文件：
+
+```python
+from omni.isaac.kit import SimulationApp
+
+# 使用 zero_delay 体验文件启动无头应用
+SimulationApp({"headless": True}, experience="apps/omni.isaac.sim.zero_delay.python.kit")
+```
+
+
+---
+# 机器人仿真代码片段（Robot Simulation Snippets）
+
+> **注意**：以下脚本只能在默认新场景（Stage）下运行一次。您可以通过菜单 **File → New** 新建场景，然后在 **Window → Script Editor** 中运行这些脚本。
+
+---
+
+#### 创建关节机构（Articulations）与批量视图（ArticulationView）
+
+下面示例向场景中添加两个 Franka 机械臂，并创建一个 `Articulation` 视图对象，以便批量控制它们的属性。
+
+```python
+import asyncio
+import numpy as np
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import Articulation
+from isaacsim.core.utils.nucleus import get_assets_root_path
+from isaacsim.core.utils.stage import add_reference_to_stage
+
+async def example():
+    # 如果已有 World 实例，则先清除
+    if World.instance():
+        World.instance().clear_instance()
+    # 创建新的仿真世界
+    world = World()
+    await world.initialize_simulation_context_async()
+    # 添加默认地面
+    world.scene.add_default_ground_plane()
+
+    # 添加两个 Franka 机械臂引用
+    asset_path = get_assets_root_path() + "/Isaac/Robots/Franka/franka_alt_fingers.usd"
+    add_reference_to_stage(usd_path=asset_path, prim_path="/World/Franka_1")
+    add_reference_to_stage(usd_path=asset_path, prim_path="/World/Franka_2")
+
+    # 使用 Articulation 视图批量处理机械臂
+    frankas_view = Articulation(prim_paths_expr="/World/Franka_[1-2]", name="frankas_view")
+    world.scene.add(frankas_view)
+    await world.reset_async()
+
+    # 设置机械臂基座的世界坐标位置
+    new_positions = np.array([[-1.0, 1.0, 0], [1.0, 1.0, 0]])
+    frankas_view.set_world_poses(positions=new_positions)
+    # 设置每个机械臂的关节角度（9 个 DOF）
+    joint_positions = np.array([
+        [1.5]*9,
+        [1.5]*9
+    ])
+    frankas_view.set_joint_positions(joint_positions)
+
+# 启动异步示例
+asyncio.ensure_future(example())
+```
+
+> 更多 `Articulation` API 操作，请参阅官方文档。
+
+---
+
+#### 关节控制（Joints Control）
+
+以下示例假设场景中已有一个路径为 `/Franka` 的 Franka 机械臂。您可以通过菜单 **Create → Isaac → Robots → From Library → Manipulators → Franka** 添加。
+
+> **提示**：至少要让仿真跑一帧后，动态控制 API 才能正常工作。可通过：
+> 
+> - 点击界面顶部的 ▶️ 播放按钮；
+>     
+> - 或运行：
+>     
+> 
+> ```python
+> import omni
+> omni.timeline.get_timeline_interface().play()
+> ```
+
+以下代码片段示例了不同的控制模式：位置、速度、力矩等。请在 **Script Editor** 中按需运行。
+
+---
+
+##### 位置控制（Position Control）
+
+```python
+from omni.isaac.dynamic_control import _dynamic_control
+import numpy as np
+
+dc = _dynamic_control.acquire_dynamic_control_interface()
+# 获取机械臂对象
+articulation = dc.get_articulation("/Franka")
+# 若目标状态有变，每帧都需唤醒机构
+dc.wake_up_articulation(articulation)
+# 随机生成 9 关节角目标
+joint_angles = [np.random.rand(9) * 2 - 1]
+# 设置位置目标
+dc.set_articulation_dof_position_targets(articulation, joint_angles)
+```
+
+##### 单关节位置控制（Single DOF Position Control）
+
+```python
+from omni.isaac.dynamic_control import _dynamic_control
+import numpy as np
+
+dc = _dynamic_control.acquire_dynamic_control_interface()
+articulation = dc.get_articulation("/Franka")
+dc.wake_up_articulation(articulation)
+# 查找名为 panda_joint2 的单个关节
+dof_ptr = dc.find_articulation_dof(articulation, "panda_joint2")
+# 设置该关节位置目标
+dc.set_dof_position_target(dof_ptr, -1.5)
+```
+
+##### 速度控制（Velocity Control）
+
+```python
+# 首先将所有 Revolute/Prismatic Joint 的刚度设为 0
+from pxr import UsdPhysics
+import omni.usd
+stage = omni.usd.get_context().get_stage()
+for prim in stage.TraverseAll():
+    typ = prim.GetTypeName()
+    if typ in ["PhysicsRevoluteJoint","PhysicsPrismaticJoint"]:
+        drive = (UsdPhysics.DriveAPI.Get(prim, "angular")
+                 if typ=="PhysicsRevoluteJoint" else
+                 UsdPhysics.DriveAPI.Get(prim, "linear"))
+        if drive:
+            drive.GetStiffnessAttr().Set(0)
+
+# 然后设置关节速度目标
+from omni.isaac.dynamic_control import _dynamic_control
+import numpy as np
+dc = _dynamic_control.acquire_dynamic_control_interface()
+articulation = dc.get_articulation("/Franka")
+dc.wake_up_articulation(articulation)
+# 随机生成 9 关节速度目标
+joint_vels = [-np.random.rand(9) * 10]
+dc.set_articulation_dof_velocity_targets(articulation, joint_vels)
+```
+
+##### 单关节速度控制（Single DOF Velocity Control）
+
+```python
+# 设置 panda_joint2 的驱动刚度为 0
+from pxr import UsdPhysics
+import omni.usd
+stage = omni.usd.get_context().get_stage()
+p2_drive = UsdPhysics.DriveAPI.Get(
+    stage.GetPrimAtPath("/Franka/panda_link1/panda_joint2"), "angular")
+p2_drive.GetStiffnessAttr().Set(0)
+
+# 设置该关节速度目标
+from omni.isaac.dynamic_control import _dynamic_control
+import numpy as np
+dc = _dynamic_control.acquire_dynamic_control_interface()
+articulation = dc.get_articulation("/Franka")
+dc.wake_up_articulation(articulation)
+dof_ptr = dc.find_articulation_dof(articulation, "panda_joint2")
+dc.set_dof_velocity_target(dof_ptr, 0.2)
+```
+
+##### 力矩控制（Torque Control）
+
+```python
+from omni.isaac.dynamic_control import _dynamic_control
+import numpy as np
+dc = _dynamic_control.acquire_dynamic_control_interface()
+articulation = dc.get_articulation("/Franka")
+dc.wake_up_articulation(articulation)
+# 随机生成 9 关节力矩目标
+joint_efforts = [-np.random.rand(9) * 1000]
+dc.set_articulation_dof_efforts(articulation, joint_efforts)
+```
+
+---
+
+#### 对象类型检查（Check Object Type）
+
+```python
+from omni.isaac.dynamic_control import _dynamic_control
+
+dc = _dynamic_control.acquire_dynamic_control_interface()
+# 查看给定 Prim 的对象类型
+obj_type = dc.peek_object_type("/Franka")
+print(obj_type)  # 应输出 ObjectType.OBJECT_ARTICULATION
+```
+
+---
+
+#### 查询关节机构信息（Query Articulation）
+
+```python
+from omni.isaac.dynamic_control import _dynamic_control
+
+dc = _dynamic_control.acquire_dynamic_control_interface()
+# 获取 Franka 机构句柄（可自动更新）
+art = dc.get_articulation("/Franka")
+# 查询结构信息
+num_joints = dc.get_articulation_joint_count(art)
+num_dofs   = dc.get_articulation_dof_count(art)
+num_bodies = dc.get_articulation_body_count(art)
+# 查找特定 DOF
+dof_ptr    = dc.find_articulation_dof(art, "panda_joint2")
+```
+
+---
+
+#### 读取关节状态（Read Joint State）
+
+```python
+from omni.isaac.dynamic_control import _dynamic_control
+
+dc = _dynamic_control.acquire_dynamic_control_interface()
+# 获取机构句柄
+art = dc.get_articulation("/Franka")
+# 获取所有 DOF 的完整状态（位置、速度、力矩）
+dof_states = dc.get_articulation_dof_states(art, _dynamic_control.STATE_ALL)
+print(dof_states)
+
+# 获取单个 DOF 状态
+ptr = dc.find_articulation_dof(art, "panda_joint2")
+dof_state = dc.get_dof_state(ptr, _dynamic_control.STATE_ALL)
+# 打印该 DOF 的位置
+print(dof_state.pos)
+```

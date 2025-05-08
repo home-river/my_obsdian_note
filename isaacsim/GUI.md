@@ -565,3 +565,320 @@ Isaac Sim 是基于 NVIDIA Omniverse 构建的，并使用 Omniverse Kit 提供�
 ## Further Learning
 
 若想深入了解并使用更丰富的世界构建工具，可参考我们的姊妹产品 Omniverse Composer。
+
+
+---
+
+## 添加简单对象 (Add Simple Objects)
+
+本教程将引导您使用基本的 GUI 功能在舞台上添加对象，并介绍如何检查和修改它们的物理属性和材质属性。
+
+## 学习目标 (Learning Objectives)
+
+本教程涵盖以下内容：
+
+- 添加并操作简单形状
+    
+- 为对象启用物理属性
+    
+- 检查碰撞属性
+    
+- 编辑摩擦等物理参数
+    
+- 编辑颜色与反射率等材质属性
+    
+
+## 入门 (Getting Started)
+
+### 前提条件 (Prerequisites)
+
+在开始本教程之前，请先完成 **Environment Setup**。
+
+
+
+---
+
+
+## 添加简单对象 (Add Simple Objects)
+
+本教程将引导您使用基本的 GUI 功能在舞台上添加对象，并介绍如何检查和修改它们的物理属性和材质属性。
+
+### 学习目标 (Learning Objectives)
+
+本教程涵盖以下内容：
+
+- 添加并操作简单形状
+    
+- 为对象启用物理属性
+    
+- 检查碰撞属性
+    
+- 编辑摩擦等物理参数
+    
+- 编辑颜色与反射率等材质属性
+    
+
+### 入门 (Getting Started)
+
+***前提条件 (Prerequisites)
+
+在开始本教程之前，请先完成 **Environment Setup**。[[GUI#Environment Setup]]
+
+### 向场景添加对象 (Adding Objects to the Scene)
+
+添加对象到舞台的方式有很多，基本都是在 Stage Context Tree 中定义一个 USD primitive。我们的目标是创建一个简单的双轮机器人，因此先用基础形状构建车身和车轮。
+
+_创建车身 (Creating the Body)_
+
+1. 在菜单栏中点击 **Create > Shapes > Cube**，您会在视口中看到一个立方体以及 “Move gizmo”（红、蓝、绿箭头）。
+    
+2. 点击并拖拽蓝色箭头，将立方体提升到地面平面之上。
+    
+3. 在应用左侧，点击 **Scale 图标**（或选中立方体后按 **R**），激活缩放控件。
+    
+4. 点击并拖拽红色控件，将立方体沿 X 轴方向缩放。
+    
+5. 在 **Property **窗口中展开 **Transform > translate**，将平移设置为 `(0, 0, 1)`，然后在 **scale** 中设为 `(1, 2, 0.5)`。
+    
+
+***创建车轮 (Creating the Wheels)
+
+1. 同样地，通过 **Create > Shapes > Cylinder** 添加一个圆柱体。
+    
+2. 在 **Geometry** 中，将 **Radius** 设为 `0.5`，将 **Height** 设为 `1.0`。
+    
+3. 将其放置到 `x = 1.5, z = 1.0`，并绕 Y 轴旋转 `90°`。
+    
+4. 在 Stage Tree 中右键该圆柱，选择 **Duplicate**。将复制体移动到 `x = -1.5`，保持其他参数不变。
+    ![[添加机器人1.jpeg]]
+
+> **Important:**  
+> 在 2022.2.0 版本中，直接在属性窗口中输入欧拉角方向有个已知的 bug，可以改为输入四元数，或直接使用 gizmo 进行旋转。
+
+### 添加物理属性 (Adding Physics Properties)
+
+到目前为止，立方体和圆柱体仅是可视 prim，并未附加任何物理或碰撞属性。按下 **Play** 后，它们不会因重力而移动。我们接下来将它们转为带碰撞的刚体。
+
+1. 在 Stage Tree 中选中 Cube 和两个 Cylinder（按住 **Ctrl+Shift** 或若为连续项则按 **Shift**）。
+    
+2. 在 **Property** 选项卡中点击 **+ Add**，选择 **Physics > Rigid Body with Colliders Preset**。
+    
+3. 按 **Play**，验证所有对象会下落到地面。
+    
+
+“Rigid Body with Colliders Preset” 会自动添加 **Rigid Body API** 和 **Collision API**。您也可以单独添加或移除这些 API：
+
+- 在 **Property** 面板中下拉找到 **Rigid Body** 和 **Collider** 模块。
+    
+- 再次点击 **+ Add** 可单独添加。
+    
+- 点击模块右上角的 **X** 可删除。
+    
+![[添加机器人2.webp]]
+***检查碰撞网格 (Examine Collision Meshes)
+
+要在视口中查看碰撞网格轮廓：
+
+1. 在视口上方点击眼睛图标，选择 **Show By Type > Physics > Colliders > All**。
+    
+2. 验证紫色轮廓是否包围了所有带有碰撞的对象（包括立方体、圆柱体和地面平面）。
+    
+[[添加机器人3.jpeg|Open: Pasted image 20250508081136.png]]
+![[添加机器人3.jpeg]]
+### 添加接触与摩擦参数 (Adding Contact and Friction Parameters)
+
+要修改摩擦属性，需先创建物理材质，然后将其分配给目标对象。
+
+1. 在菜单栏中点击 **Create > Physics > Physics Material**。
+    
+2. 在弹出框中选择 **Rigid Body Material**，在 Stage Tree 中会出现一个新的 **PhysicsMaterial**。
+    
+3. 在该 **PhysicsMaterial** 的属性面板中调节摩擦系数、恢复系数等参数。
+    
+4. 将材质应用到对象：
+    
+    - 在 Stage Tree 中选中目标对象。
+        
+    - 在 **Property** 选项卡中找到 **Materials on Selected Model**，从下拉列表中选择刚创建的物理材质。
+        
+[[添加机器人4.jpeg|Open: Pasted image 20250508081319.png]]
+![[添加机器人4.jpeg]]
+### 材质属性 (Material Properties)
+
+虽然对象会反射先前添加的聚光灯颜色，但默认并未赋予真正的材质颜色。关闭聚光灯可验证。
+[[添加机器人5.jpeg|Open: Pasted image 20250508081542.png]]
+![[添加机器人5.jpeg]]
+要更改对象颜色，同样需要创建并分配材质：
+
+1. 点击 **Create > Materials > OmniPBR**，重复两次。
+    
+2. 在 Stage Tree 中右键新材质，将它们重命名为 `body` 和 `wheel`。
+    
+3. 在各自的材质 **Property** 面板中，通过 **Materials on Selected Models** 指定对应的刚体。
+    
+4. 选中材质，调整 **Shader > Albedo > Base Color**，以及 **Reflectivity**, **Roughness** 等属性。
+    
+5. 验证车身和车轮的颜色已随设置改变。
+    [[添加机器人6.jpeg|Open: Pasted image 20250508081623.png]]
+![[添加机器人6.jpeg]]
+
+### 总结 (Summary)
+
+本教程讲解了如何在 GUI 中：
+
+- 添加并操作基础形状
+    
+- 编辑物理属性、碰撞属性和材质属性
+    
+
+***下一步 (Next Steps)
+
+- 继续阅读 **Working with USD**，学习如何保存世界并以 USD 格式加载资产。
+    
+- 前往 **Assemble a Simple Robot**，了解如何将这些几何体组装成可移动的车辆。
+
+
+---
+
+## 装配一个简单机器人
+
+NVIDIA Isaac Sim 的 GUI 界面功能与 NVIDIA Omniverse™ USD Composer 中用于世界构建的功能相同。在本系列教程中，我们将重点介绍与机器人应用最相关的 GUI 功能。对于更复杂的一般世界创建，请参阅 Omniverse Composer。
+
+在本教程中，我们将为一个由三段刚体和两个 Revolute Joint（旋转关节）组成的简单“机器人”绑定铰链，以介绍关节（joints）和构件（articulations）的基本概念。我们将把在 **Add Simple Objects** 中添加到舞台（stage）中的对象，变成一个具有矩形机身和两个圆柱形车轮的模拟移动机器人。虽然对于通过 **Importing your Onshape Document** 或 **URDF Importer Extension** 导入的机器人，此步骤并非必需，但这些概念对于调优机器人和使用 articulations 组装对象非常重要。
+
+### 学习目标
+
+本教程演示如何为双轮移动机器人绑定铰链，并涵盖以下内容：
+
+- 组织 **Stage Tree** 层级结构
+    
+- 在两个刚体之间添加关节（joints）
+    
+- 添加关节驱动（joint drives）及其属性
+    
+- 添加构件（articulations）
+    
+- 通过 Articulation Velocity Controller 移动机器人
+    
+
+### 入门准备
+
+**先决条件**
+
+- 完成 **Add Simple Objects**。
+    
+
+### 添加关节
+
+1. 如果你已在 GUI Tutorials 后保存了自己的 `mock_robot.usd`，可通过 **File > Open** 打开该文件；否则，加载资产浏览器（asset browser）中位于 **Samples > Rigging > MockRobot > mock_robot_no_joints** 的资源。**不要**以引用（reference）方式加载，因为需要对文件进行永久修改。
+    
+2. 为了便于管理，在 **Stage Tree** 中右键单击 **Create > Scope** 来创建一个 Scope，用于存放关节。
+    
+3. 要在两个刚体之间添加 Revolute Joint，先在 **Stage Tree** 中先后选中父体（例如 `body/body`），再按住 `Ctrl` 选中子体（例如 `wheel_left/wheel_left`）。
+    
+4. 选中后，右键单击并选择 **Create > Physics > Joints > Revolute Joint**。此时，`RevoluteJoint` 会出现在 **wheel_left** 下，将其重命名为 `wheel_joint_left`。
+    
+5. 在 **Property** 选项卡中，确认 **body0** 为 `/mock_robot/body/body`（立方体），**body1** 为 `/mock_robot/wheel_left/wheel_left`（圆柱体）。
+    
+6. 设置 **Local Rotation 0** 为 `0.0`，**Local Rotation 1** 为 `-90.0`，以修正两个模型之间的旋转错位。
+    
+7. 将关节的 **Axis** 更改为 `Y`。
+    
+8. 对右侧车轮重复步骤 3–7，创建并配置 `wheel_joint_right`。
+    
+![[组装机器人1.jpeg]]
+添加关节后，按 **Play**，你会发现原本会各自下落的三个刚体现在像通过 Revolute Joint 连接在一起一样联合运动。按住 `Shift` 键并在视口中拖拽机器人任意部位，可直观地看到它们协同移动。
+![[组装机器人2.webp]]
+### 添加关节驱动
+
+添加关节只是建立了机械连接，要对关节进行控制并驱动它们，需添加 Drive API。
+
+1. 在 **Stage Tree** 中选中两个关节（`wheel_joint_left` 和 `wheel_joint_right`）。
+    
+2. 在 **Property** 选项卡中点击 **+ Add**，选择 **Physics > Angular Drive**，即可为两个关节同时添加驱动。
+    
+3. 配置驱动模式：
+    
+    - **Position Control**（位置控制）：将 **Stiffness** 设置为较高值，将 **Damping** 设置为较低或 `0`。
+        
+    - **Velocity Control**（速度控制）：将 **Damping** 设置为较高值，将 **Stiffness** 设置为 `0`。
+        
+4. 对于车轮关节，更适合使用速度控制模式，因此将两侧车轮的 **Damping** 设为 `1e4`，**Target Velocity** 设为 `200`。
+    
+5. 如需限制关节行程，可在 **Raw USD Properties > Lower Limit** 和 **Upper Limit** 中设置范围。
+    
+6. 按 **Play**，即可看到模拟移动机器人驶离原地。
+    
+![[组装机器人3.webp]]
+### 添加构件
+
+虽然直接驱动关节可以移动机器人，但使用 articulations（构件）能获得更高的仿真精度、减少关节误差，并能处理更大的质量比。要将一串连接的刚体和关节转成单个构件，需要添加 Articulation Root 组件。
+
+根据 Physics Core: Articulation 中对构件树的定义：
+
+> - 对于固定基底（fixed-base）构件，将 Articulation Root Component 添加到：
+>     
+>     1. 将构件基底固定到世界的固定关节，或
+>         
+>     2. USD 层级中该固定关节的某个祖先。
+>         
+> - 对于浮动基底（floating-base）构件，将 Articulation Root Component 添加到：
+>     
+>     1. 构件的根刚体链接，或
+>         
+>     2. USD 层级中该根链接的某个祖先。
+>         
+
+在本教程中，按以下步骤为机器人添加构件根：
+
+1. 在 **Stage Tree** 中选中 `mock_robot`。
+    
+2. 在 **Property** 选项卡中点击 **+ Add**。
+    
+3. 选择 **Physics > Articulation Root**。
+    
+4. 验证结果应与资产浏览器中 **Samples > Rigging > MockRobot > mock_robot_rigged** 提供的资源一致。
+    
+
+### 添加控制器
+
+构件就绪后，可使用工具测试机器人的运动：
+
+1. 转到 **Tools > Robotics > Omnigraph Controllers > Joint Velocity**，添加一个 **Articulation Velocity Controller** Graph。该图可通过设置各关节的目标速度来控制机器人移动。
+    
+2. 点击 “Add” 按钮，为 **Robot Prim**（或 **Articulation Root**）参数选择带有 Articulation Root API 的 prim，此处为 `/mock_robot`。
+    
+3. 点击 **OK**，创建 Graph。
+    
+4. 按 **Play** 启动仿真，若当前已有默认速度目标，机器人会立即朝目标运动。
+    
+5. 若需修改关节命令，可在 **Stage Tree** 中展开 `/World/Graphs/velocity_controller/JointCommandArray`，选中 **JointCommandArray**，然后在 **Property** 选项卡的 **Raw USD Properties** 中调整 **input0**、**input1** 等参数。
+    
+
+> **注意**  
+> Articulation controllers 使用弧度（radians），而在选择单个关节时 **Property** 选项卡下的 Drive API 默认属性以度（degrees）为单位。
+
+此机器人也可使用 Differential Controller 控制。有关 Omnigraph Controller 快捷方式，请参阅 **Commonly Used Omnigraph Shortcuts**。
+[[组装机器人4.jpeg|Open: Pasted image 20250508094032.png]]
+![[组装机器人4.jpeg]]
+### 小结
+
+在本教程中，你已学习如何：
+
+- 使用关节（joints）连接刚体
+    
+- 添加关节驱动（joint drives）以控制关节
+    
+- 将关节链转为构件（articulations）
+    
+- 使用 Articulation Velocity Controller 控制机器人
+    
+
+#### 后续步骤
+
+- 继续学习 **Add Camera and Sensors**，以了解如何为车辆添加摄像头。
+    
+
+#### 相关阅读
+
+- **Physics Core: Articulation**（关于关节和构件仿真的更多细节）

@@ -882,3 +882,287 @@ NVIDIA Isaac Sim 的 GUI 界面功能与 NVIDIA Omniverse™ USD Composer 中用
 #### 相关阅读
 
 - **Physics Core: Articulation**（关于关节和构件仿真的更多细节）
+
+
+
+
+---
+## 添加相机与传感器 (Add Camera and Sensors)
+
+Isaac Sim 提供多种传感器，用于感知环境和机器人状态。本教程将指导您如何为模拟机器人挂载相机传感器，该流程同样适用于其他传感器。有关相机及其他传感器的详细信息，请参阅我们的高级教程和手册中的 Sensor Extensions。
+
+### 学习目标 (Learning Objectives)
+
+本教程将详细讲解如何：
+
+- 添加相机
+    
+- 将相机附加到几何体
+    
+
+### 入门 (Getting Started)
+
+***前提条件 (Prerequisites)
+
+- 完成 Getting Started 教程及 GUI Tutorials 系列中的前序教程
+    
+- 了解相机坐标系和轴的基础知识
+    
+
+> **注意**  
+> 建议使用 Isaac/Samples/Rigging/MockRobot/mock_robot_rigged.usd 文件开始本教程，以获得标准化的场景设置。
+
+---
+
+### 添加相机 (Adding Camera)
+
+1. 在菜单栏选择 **Create > Camera**。此时舞台树中会出现一个 Camera 节点，并在视图中显示一个灰色的相机视锥线框。
+    
+2. 和其他对象一样，可以直接移动或旋转该 Camera 的 transform。
+    
+3. 或者，可先在视口中调整至所需视角，再点击视口左上角的 **Camera** 按钮，选择 **Camera > Create Camera from View**。新相机会出现在舞台树中，且可在 **Camera** 按钮的列表中进行切换。
+    
+
+---
+![[添加相机.png]]
+### 检查相机 (Inspect the Camera)
+
+1. 选择 **Tools > Robotics > Camera Inspector**，打开 Camera Inspector Extension。
+    
+2. 在下拉菜单中确认已列出相机，必要时点击 **Refresh** 按钮以发现新相机。
+    
+3. 选中要检查的相机，可在新建的视口中实时查看相机画面，并根据需要获取或设置相机姿态。
+    
+
+---
+
+### 将相机附加到机器人 (Attach a Camera to Robot)
+
+1. 将新建相机重命名为 `car_camera`。
+    
+2. 为便于定位相机视角，在菜单栏选择 **Window > Viewports > Viewport 2**，打开第二个视口窗口。
+    
+3. 保持一个视口为 **Perspective** 视图，另一个切换至 `car_camera` 视角：点击该视口顶部的 **Cameras** 菜单，选择 **Camera > car_camera**。
+    
+4. 在 Stage Tree 中将 `car_camera` 拖拽到 `body` 下，令相机与机身一同移动。
+    
+5. 调整 `car_camera` 的 Transform 参数使其略向下、面向前方：
+    
+    - Translation: `x = -0.6, y = 0, z = 2.2`
+        
+    - Orientation: `x = 0, y = -80, z = -90`
+        
+    - Scale: `x = 1, y = 1, z = 1`
+        
+6. 在 Perspective 视口中验证：一侧为车载相机视图，另一侧显示相机相对于机器人机身与地面的整体位置与朝向。
+    
+7. 按 **Play**，相机将随机器人一起运动。
+    
+
+> **重要提示**  
+> 如果在展示时直接移动相机视图，会修改相机自身属性。推荐方法是：
+> 
+> 1. 在机身下创建一个新的空 Prim，并设置好相对偏移；
+>     
+> 2. 将相机附加到该 Prim。  
+>     如此一来，即便不慎移动了相机，只需将其相对于父 Prim 的位置和朝向参数重置为零，即可恢复初始安装位置。
+>     
+
+---
+
+### 总结 (Summary)
+
+本教程中，您学习了如何：
+
+- 使用 Camera Inspector Extension 实时查看和配置相机
+    
+- 添加相机并将其挂载在机器人机身上
+    
+
+---
+
+### 下一步 (Next Steps)
+
+- 前往 **Omniverse Script Editor**，学习如何在 GUI 中运行 Python API。
+    
+- 如需为更复杂的机器人添加相机和传感器，请参考 **Rig a Mobile Robot** 教程。
+
+
+
+---
+## Create 菜单
+
+下表列出 Isaac Sim 中 **Create** 选项卡下常用的场景创建与布局功能。
+
+| Menu Item    | 操作说明                             |
+| ------------ | -------------------------------- |
+| Light        | 创建自定义光源。（详情见光照文档）                |
+| Camera       | 向场景中添加相机。                        |
+| Material     | 基于模板创建 Omniverse 材质。             |
+| Physics      | 添加物理相关组件（刚体、碰撞体、关节等）。（详情见物理文档）   |
+| Sensors      | 向场景中添加相机、基于 RTX、PhysX 或物理的其他传感器。 |
+| Robots       | 向场景中添加各类机器人资源。                   |
+| Environments | 向场景中添加各类环境资源（如室内场景、户外地形等）。       |
+| April Tag    | 向场景中添加 AprilTag 识别标签资源。          |
+
+---
+## Replicator 菜单
+
+下面列出了在 Isaac Sim 中 **Tools → Replicator** 下常用的一组工具和扩展，用于 omni.replicator 的生成、可视化和合成数据记录。
+
+| UI Element              | 操作说明                                                   |
+| ----------------------- | ------------------------------------------------------ |
+| Semantics Schema Editor | 添加语义标注信息。（详情见 Semantics Schema Editor 文档）              |
+| Synthetic Data Recorder | 合成数据记录器，用于录制传感器输出及元数据。（详情见 Synthetic Data Recorder 文档） |
+| ReplicatorYAML          | 基于 Replicator YAML 配置生成数据集。                            |
+| Start                   | 启动随机化流程并将结果写入磁盘（omni.replicator）。                      |
+| Step                    | 执行一次随机化操作并将结果写入磁盘（omni.replicator）。                    |
+| Preview                 | 执行一次随机化迭代但不写入磁盘，仅在视图中预览效果（omni.replicator）。            |
+
+
+
+---
+## 选择模式 (Selection Modes)
+
+Omniverse 中有两种选择模式：**Selection by type** 和 **Selection by model kind**。
+
+- **Selection by type** 会在场景树中尽可能深入地选中被点击的 Prim。
+    
+- **Selection by model kind** 则从被点击的 mesh 开始，向上遍历场景树，直到遇到用户在属性窗口中指定的 Model Kind 为止。  
+    每个 Prim 的 **type** 在创建时即已确定，不可更改；而 **kind** 是可在属性窗口中由用户设置的属性。​[Isaac Sim Documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/gui/selection-modes.html)
+    
+
+### 切换选择模式 (Changing Selection Mode)
+
+点击视口右侧工具栏最顶部的图标，可在 **Selection by type** 和 **Selection by model kind** 之间切换：​[Isaac Sim Documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/gui/selection-modes.html)
+![[选择模式1.png]]
+> **Note:**
+> 
+> - 按 `T` 热键可快速切换选择模式。
+>     
+> - 按 `Q` 热键可切换到 “Select from Transform” 模式。
+>     
+
+右键点击该按钮，还会弹出选择模式的展开菜单，提供针对类型和 Model Kind 的筛选选项。​[Isaac Sim Documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/gui/selection-modes.html)
+![[选择模式2.png]]
+### 按类型选择 (Type Selection)
+
+当按钮显示为 **两个灰色方块 + 一个橙色方块** 时，表示处于 Type Selection 模式。​[Isaac Sim Documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/gui/selection-modes.html)
+
+![[选择模式3.png]]
+- 在此模式下，点击视口中的对象会选中场景树中最深层的对应 Prim（通常是 mesh，也可能是 light 或 camera）。
+    
+- 右键按钮后，可在以下四个筛选项中切换：
+    
+    - **All Prim Types**（默认，不做过滤）
+        
+    - **Meshes**
+        
+    - **Lights**
+        
+    - **Cameras**
+        
+- Prim 的 type 在创建时确定且不可编辑。
+    
+
+> **Note:** 在 Prim 模式下，也可点击对象的包围框 (bounding box) 选中其父级组。
+![[选择模式4.png]]
+### 按模型种类选择 (Model Kind Selection)
+
+当按钮显示为 **单个灰色方块** 时，表示处于 Model Kind Selection 模式。​[Isaac Sim Documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/gui/selection-modes.html)
+![[选择模式5.png]]
+- 在此模式下，点击视口中的对象会先定位到 Type Selection 会选中的最深层 Prim，然后向上遍历场景树，选中第一个具有对应 Kind 属性的 Prim。
+    
+- 右键按钮后，可在以下五个筛选项中切换：
+    
+    - **All Model Kinds**（默认，不做过滤）
+        
+    - **Assembly**
+        
+    - **Group**
+        
+    - **Component**
+        
+    - **Subcomponent**
+        
+- 通过结合在场景结构中为各 Prim 设置 Kind 属性，以及选择相应的 Model Kind 过滤器，可实现基于用途的分层化群组选择。
+
+
+---
+## 键盘快捷键参考
+
+键盘快捷键通过提供“热键”，可减少大量点击操作，实现“一键直达”式的高效交互。
+
+---
+
+## 视口控制
+
+|输入|备用输入|功能|
+|---|---|---|
+|右键 + W|右键 + ↑|向前移动|
+|右键 + S|右键 + ↓|向后移动|
+|右键 + A|右键 + ←|向左移动|
+|右键 + D|右键 + →|向右移动|
+|右键 + Q|右键 + Page Up|向上移动|
+|右键 + E|右键 + Page Down|向下移动|
+|滚轮|Opt + 右键|缩放|
+|左键|—|选中|
+|Esc|—|取消选中|
+|选中 + `F`|—|聚焦到所选物体|
+|取消选中 + `F`|—|聚焦到全局视图|
+|Opt + 左键|—|围绕视口中心旋转|
+|中键（按住）|—|平移视图|
+|右键（按住）|—|旋转视图|
+|右键（单击）|—|调出上下文菜单|
+|Shift + H|—|显示/隐藏网格及 HUD 信息|
+|F7|—|启用/禁用所有 UI 元素可见性|
+|F11|—|切换全屏模式|
+|F10|—|截取屏幕截图|
+
+> **注意：**  
+> 在执行任一移动命令时，按住 Shift 可将移动速度加倍，按住 Ctrl 可将移动速度减半。
+
+---
+
+## 选择
+
+|输入|备用输入|功能|
+|---|---|---|
+|Ctrl + A|—|选中当前场景中的所有资源|
+|Ctrl + I|—|反选：选中所有未被选中的资源，并取消选中已选中的资源|
+|Esc|—|取消选中当前场景中的所有资源|
+
+---
+
+## 文件操作
+
+|输入|备用输入|功能|
+|---|---|---|
+|Ctrl + S|—|保存文件|
+|Ctrl + O|—|打开文件|
+
+---
+
+## 资源控制
+
+|输入|备用输入|功能|
+|---|---|---|
+|Del|—|删除所选资源|
+|Ctrl + Shift + I|—|实例化当前资源|
+|Ctrl + D|—|复制当前资源|
+|Ctrl + G|—|将所选资源分组到容器中|
+|H|—|切换所选资源的可见性|
+
+---
+
+## 动画控制
+
+|输入|备用输入|功能|
+|---|---|---|
+|Space|—|播放/暂停动画|
+
+---
+
+## 自定义快捷键
+
+可通过 “Hotkeys Extension” 自定义快捷键组合，以提升操作效率。

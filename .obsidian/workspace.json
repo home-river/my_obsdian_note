@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "杂项/Isaacsim选项卡翻译.md",
+                "file": "isaacsim/参数存放/参数存放.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Isaacsim选项卡翻译"
+              "title": "参数存放"
             }
           }
         ]
@@ -142,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "杂项/Isaacsim选项卡翻译.md",
+                "file": "isaacsim/参数存放/参数存放.md",
                 "followCursor": false,
                 "showSearch": true,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Isaacsim选项卡翻译 的大纲"
+              "title": "参数存放 的大纲"
             }
           }
         ],
@@ -174,13 +174,15 @@
   },
   "active": "a07de87a8d051935",
   "lastOpenFiles": [
+    "isaacsim/GUI.md",
+    "isaacsim/参数存放/参数存放.md",
+    "isaacsim/参数存放",
+    "杂项/Isaacsim选项卡翻译.md",
     "杂项/图片存放/旋转关节选项卡.jpeg",
     "isaacsim/extension/extension.md",
-    "杂项/Isaacsim选项卡翻译.md",
     "isaacsim/extension",
     "杂项/图片存放/旋转关节.jpeg",
     "Pasted image 20250508151955.png",
-    "isaacsim/GUI.md",
     "Pasted image 20250508095537.png",
     "图片存放/Create选项卡.jpeg",
     "杂项/图片存放/关节.jpeg",
@@ -207,7 +209,6 @@
     "isaacsim/Python script/Python Scripting.md.lddec",
     "isaacsim配置.md.lddec",
     "欢迎.md.lddec",
-    "[Core.md",
-    "isaacsim/Python script"
+    "[Core.md"
   ]
 }

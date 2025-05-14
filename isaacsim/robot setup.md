@@ -2271,45 +2271,87 @@ simulation_app.close()
 ---
 
 ### 打破 Articulation 闭环
+[[bb216ff6190bbc3c17b38f5951a8e7a9_MD5.jpeg|Open: Pasted image 20250514170836.png]]
+![[bb216ff6190bbc3c17b38f5951a8e7a9_MD5.jpeg]]
+如需了解更多细节，请参阅《[物理仿真基础](https://docs.isaacsim.omniverse.nvidia.com/latest/physics/simulation_fundamentals.html#simulation-fundamentals)》一文。
 
-模拟时你会看到两个大警告提示：Articulation 必须是一个运动学树（kinematic tree）——闭环会使求解器出错。无需删除任何关节，而是选一个关节排除出 Articulation，用最大坐标（maximal coordinate）关节来替代。因最大坐标关节求解优先级较低，它也是仿真中最易出现误差的那个。
+**Articulation（关节编排）** 必须是一棵“运动学树”（kinematic tree），否则求解器（solver）会报闭环错误（loop-closure error）。
 
-- **选择哪个关节？**  
-    既要最短化 Articulation 长度，也要最小化对功能的影响。理想关节：无运动限制、无阻尼阻力、无驱动。若无完全符合条件的关节，可先将这些属性转移到相邻关节后再剔除。
+- **无需删除任何关节**。
     
-- **本夹爪示例**  
-    最佳剔除的是连接内轴到夹爪主体的 `inner_knuckle_joint`（图中橙色标记）。
+- 要消除警告，只需在所有关节中 **选一个**，将它 **排除** 出 Articulation，让它以 **最大坐标关节**（maximal coordinate joint）的形式存在。
+    
+- 最大坐标关节在求解时优先级最低，因此它恰好承担了仿真中误差最大的那部分累积。
+    
+
+**如何选“排除对象”？**
+
+1. **最短链路原则**：剔除后，剩余的 Articulation 链尽可能短。
+    
+2. **功能干扰最小**：剔除的关节不应影响机器人正常运动。
+    
+3. **理想属性**：该关节应仅承担空间约束，且具有以下特征：
+    
+    - 无运动范围限制（limits）
+        
+    - 无阻尼或摩擦阻力（damping/friction）
+        
+    - 无驱动（drive）
+        
+4. 若当前没有完全符合上述条件的关节，可先把它的“限位、阻尼、驱动”属性转移到相邻关节，再将其剔除。
+    
+
+**本例（并联夹爪）最佳方案**
+
+- 选取连接“内轴”（inner shaft）与“夹爪主体”（gripper body）的 `inner_knuckle_joint`。
+    
+- 如下图所示，该关节以橙色标记，符合“最短链路”且对夹爪功能影响极低。
+    
+[[ad659a20a3fa6b031f6e01bece65bda5_MD5.jpeg|Open: Pasted image 20250514171656.png]]
+![[ad659a20a3fa6b031f6e01bece65bda5_MD5.jpeg]]
+
+---
+
+## 测试环境搭建
+
+由于夹爪尚未连接到任何可移动结构，无法直接测试其物理性能，因此需要先添加一个测试用的支架结构：
+
+1. 在场景中创建两个 Xform 节点，并为它们应用刚体（Rigid Body）API。
+    
+2. 在 World 与第一个 Xform 之间添加一个固定关节（Fixed Joint）。
+    
+3. 在第一个 Xform 与第二个 Xform 之间添加一个平移关节（Prismatic Joint）。
+    
+4. 在第二个 Xform 与夹爪的 `base_link` 之间再添加一个平移关节。
+    
+5. 为这两个平移关节添加关节驱动（Joint Drive），以便通过位置命令实现抬升和平移操作。
+    
+
+在关节驱动的高级属性中，设置如下参数：
+
+- **最大关节速度**（Max Joint Velocity）：5.0
+    
+- **关节行程限制**（Limits）：[0, 1]
+    
+- **阻尼系数**（Damping）：10000.0
+    
+- **刚度系数**（Stiffness）：10000.0
+    
+
+> 注意：新建的所有关节必须放置在 `Robotiq_2F_85` prim 之外。
+
+为了便于观察夹爪的抓握效果，还需创建以下辅助物体：
+
+- 一个 **圆柱体**，缩放至 `[0.05, 0.05, 0.2]`，位置设置为 `X = 0.12`。
+    
+- 一个 **地面平面**，位置设置为 `Z = -0.1`。
     
 
 ---
 
-### 准备测试环境
+### 脚本示例
 
-因为夹爪还没挂在任何结构上，无法测试物理性能，我们要搭建一个简单的测试架：
-
-1. 新建两个 Xform，分别添加 Rigid Body API
-    
-2. 用 Fixed Joint 将 World 与第一个 Xform 连接
-    
-3. 用 Prismatic Joint 连接第一个 Xform 与第二个 Xform
-    
-4. 再用 Prismatic Joint 连接第二个 Xform 与夹爪的 `base_link`
-    
-5. 为两个 Prismatic Joint 添加 position drive，并设置：
-    
-    - 最大关节速度：5.0
-        
-    - 关节行程限制：[0, 1]
-        
-    - Drive 阻尼：10000
-        
-    - Drive 刚度：10000
-        
-
-确保新建的关节都不在 `Robotiq_2F_85` prim 下。  
-然后创建一个半径 0.05、高 0.2 的 Cylinder，放在 X=0.12 处；再建一个地面平面，Z=-0.1 处。
-
-> 提示：可将下面脚本粘到 Script Editor（`Window > Script Editor`）里运行，自动创建上述结构以及地面和平面和圆柱体。
+可在 **Script Editor**（窗口 > Script Editor）中粘贴并运行以下脚本，一键创建上述结构和辅助物体：
 
 ```python
 from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, PhysicsSchemaTools, Gf, Sdf
@@ -2317,18 +2359,89 @@ import omni.usd
 
 stage = omni.usd.get_context().get_stage()
 
-# …（同上文提供的脚本）
+# 创建 Xform 节点
+xform = UsdGeom.Xform.Define(stage, "/World/Xform")
+xform_1 = UsdGeom.Xform.Define(stage, "/World/Xform_1")
+
+# 为 Xform 节点应用刚体 API
+for node in [xform, xform_1]:
+    UsdPhysics.RigidBodyAPI.Apply(node.GetPrim())
+
+# 创建 World → Xform 的固定关节
+fixed_joint = UsdPhysics.FixedJoint.Define(
+    stage,
+    xform.GetPath().AppendChild("fixed_joint")
+)
+fixed_joint.CreateBody1Rel().SetTargets([str(xform.GetPath())])
+
+# 创建第一个平移关节（沿 Z 轴）
+prismatic_joint_1 = UsdPhysics.PrismaticJoint.Define(stage, "/World/Joint_Z")
+prismatic_joint_1.CreateAxisAttr("Z")
+prismatic_joint_1.CreateLowerLimitAttr(0.0)
+prismatic_joint_1.CreateUpperLimitAttr(1.0)
+prismatic_joint_1.CreateBody0Rel().SetTargets([str(xform.GetPath())])
+prismatic_joint_1.CreateBody1Rel().SetTargets([str(xform_1.GetPath())])
+
+# 创建第二个平移关节（沿 X 轴）
+prismatic_joint_2 = UsdPhysics.PrismaticJoint.Define(stage, "/World/Joint_X")
+prismatic_joint_2.CreateAxisAttr("X")
+prismatic_joint_2.CreateLowerLimitAttr(0.0)
+prismatic_joint_2.CreateUpperLimitAttr(1.0)
+prismatic_joint_2.CreateBody0Rel().SetTargets([str(xform_1.GetPath())])
+prismatic_joint_2.CreateBody1Rel().SetTargets([
+    "/World/Robotiq_2F_85/base_link"  # 根据实际路径更新 base_link
+])
+
+# 为平移关节添加驱动，并设置阻尼和刚度
+for joint in [prismatic_joint_1, prismatic_joint_2]:
+    drive = UsdPhysics.DriveAPI.Apply(joint.GetPrim(), "linear")
+    drive.CreateDampingAttr(10000.0)
+    drive.CreateStiffnessAttr(10000.0)
+    physx_joint = PhysxSchema.PhysxJointAPI.Get(stage, str(joint.GetPath()))
+    physx_joint.CreateMaxJointVelocityAttr().Set(5.0)
+
+# 添加地面平面
+PhysicsSchemaTools.addGroundPlane(
+    stage,
+    "/World/groundPlane",
+    "Z",
+    100,
+    Gf.Vec3f(0, 0, -0.1),
+    Gf.Vec3f(1.0)
+)
+
+# 创建圆柱体并应用刚体与碰撞
+result, path = omni.kit.commands.execute(
+    "CreateMeshPrimCommand",
+    prim_type="Cylinder"
+)
+cylinder_prim = stage.GetPrimAtPath(path)
+cylinder_prim.GetAttribute("xformOp:scale").Set((0.05, 0.05, 0.2))
+cylinder_prim.GetAttribute("xformOp:translate").Set((0.12, 0, 0))
+cylinder_body = UsdPhysics.RigidBodyAPI.Apply(cylinder_prim)
+UsdPhysics.CollisionAPI.Apply(cylinder_prim)
+mass_api = UsdPhysics.MassAPI.Apply(cylinder_body.GetPrim())
+mass_api.CreateMassAttr(0.20)
+
+# 创建物理场景
+scene = UsdPhysics.Scene.Define(stage, Sdf.Path("/physicsScene"))
+physx_scene_api = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
+# 关闭 GPU 动力学（针对小规模测试场景）
+physx_scene_api.CreateEnableGPUDynamicsAttr(False)
 ```
 
-- 打开 Physics Authoring Toolbar（`Window > Simulation > Physics Authoring Toolbar`），启用 Physics Inspector。
+---
+
+### 在 Physics Authoring Toolbar 中验证
+
+1. 打开 **Physics Authoring Toolbar**（窗口 > Simulation > Physics Authoring Toolbar），并启用 **Physics Inspector**（点击 Settings 按钮，勾选 Physics Inspector）。
     
-- 选中 Xform、Xform_1 和 Robotiq_2F_85，若未显示，先 Start/Stop 仿真再点击刷新。
+2. 选中 `Xform`、`Xform_1` 和 `Robotiq_2F_85`，如果未显示属性，可先启动/停止一次仿真，然后点击刷新按钮。
     
-- 拖动 Joint_X Drive 的目标滑条，观察指爪“散开”效果。
-    
-- 注意：在 Physics Inspector 中操作，不用运行仿真也能预览选中对象的物理属性。
+3. 拖动 `Joint_X` 驱动目标滑块，观察夹爪在场景中的“散开”效果。
     
 
+> 小贴士：在 `Physics Inspector` 中修改关节属性时，无需运行完整仿真即可实时预览选中对象的物理行为。
 ---
 
 ## 添加关节驱动
@@ -2430,3 +2543,155 @@ Physics Inspector 操作不够便捷，可借助 Omnigraph 构建简化开闭操
 
 **总结**  
 本教程介绍了从 Rigged Onshape 文档导入资产、后处理调整以构建正确的仿真层次结构、配置力控驱动与 Mimic 关节的完整流程。过程中我们验证并排查了仿真行为问题，优化性能。同时利用多层编辑（Layered Editing）方法，在保持测试环境的前提下，生成了一个可直接使用的夹爪资产。
+
+
+---
+
+# *组装机器人和刚体
+
+---
+
+### 学习目标
+
+- 本教程演示如何使用 `isaacsim.robot_setup.assembler` 扩展，将两个 USD 资产组装为单个刚体。
+    
+- 本教程主要展示 Robot Assembler UI 工具的使用。
+    
+- 完成本教程后，用户将了解组装后实体的物理机制、何时使用 Robot Assembler，以及在 NVIDIA Isaac Sim 中组装刚体的当前限制。
+    
+
+> **5–10 分钟 教程**
+
+---
+
+### 开始使用
+
+要使用本教程，用户应具备两个希望组装为一个的 USD 资产，例如：
+
+- 需要附加到抓手的机械臂。
+    
+- 需要固定到移动底座上的机器人。
+    
+
+此处“机器人”指可归类为“关节联动体”（Articulation）的 USD 资产（具有可控自由度的刚体）。详见 Rigging Robots。
+
+---
+
+### 理解组装实体的机械原理
+
+Robot Assembler 工具允许用户通过物理模拟的固定关节，将两个 USD 资产合并。合并后生成的新 USD 资产可保存，并在加载时无需再次使用 Robot Assembler。固定关节的物理模拟特性是正确使用该扩展的关键：在 Omniverse 中，物理仅在时间轴播放时生效；当物理未激活时，固定关节无任何作用。Robot Assembler 应仅用于那些在播放时需要运动的资产合并场景。例如，将机器人固定在静止的桌面上时，不需要固定关节，用户只需分别放置机器人和桌面，并在播放后它们会保持位置。
+
+此外，由于两部分通过物理模拟的固定关节连接，其相对位置由物理求解器计算。如果在时间轴暂停时，两资产已相对正确放置，则播放后通常很稳定；但若在暂停时将某一部分大幅移动，启动播放时可能出现不稳定。
+
+---
+
+### 使用 Robot Assembler 工具
+
+#### 组装机器人
+
+在 NVIDIA Isaac Sim 工具栏中，依次选择：  
+**Tools → Robotics → Asset Editors → Robot Assembler**。  
+要使用 Robot Assembler，可先将待组装资产加载到 USD 场景中，然后点击左侧工具栏的 **PLAY** 按钮。
+[[3ea8afb6f827c0bae0596a7343c2761a_MD5.jpeg|Open: Pasted image 20250514173745.png]]
+![[3ea8afb6f827c0bae0596a7343c2761a_MD5.jpeg]]
+您现在可以选择 “Base Robot”（基座机器人）和 “Attach Robot”（附加机器人）。“附加机器人”将成为一个浮动刚体，其位置由其附着在“基座机器人”上的框架决定。
+
+**选中后，可使用 “Set Robot Position” 字段移动两个关节联动体**。这是在组装前后确认它们按预期工作的一种好方法。建议在组装前，通过 Set Robot Position 字段检查两个机器人的关节是否可控。
+
+一旦选择了两个机器人，“Assembly Frame”（组装框架）选项将可用。用户可以选择希望附着机器人的两个框架。选择好合适的框架后，点击 “BEGIN ASSEMBLE”。在下一个面板中，您可以点击 “SELECT ATTACH POINT” 按钮，在舞台上编辑所选的 Xform Prim，来指定这两个框架之间的固定平移和旋转。一旦对固定变换满意，点击 “ASSEMBLE” 即可完成最终组装。
+[[cda3a7681b036be8f13db27cf4886a3e_MD5.jpeg|Open: Pasted image 20250514173920.png]]
+![[cda3a7681b036be8f13db27cf4886a3e_MD5.jpeg]]
+
+两个机器人现在通过用户定义的固定关节连接在一起。当 “Base Robot”（基座机器人）移动时，“Attach Robot”（附加机器人）会随之移动。要通过代码控制组装后的机器人，用户可以像往常一样使用 `Articulation` 类：使用 “Base Robot” 的 prim 路径来控制基座机器人的自由度（DOFs），使用 “Attach Robot” 的 prim 路径来控制附加机器人的自由度。
+
+在组装框架界面中，您还可以勾选一个选项，将两个关节联动体视为单一机器人。这样一来，两个机器人的所有自由度都可以通过 “Base Robot” 的 prim 路径进行控制，这也能使物理仿真更加稳定。
+
+机器人组装完成后，由于关节系统已更改，您可能需要执行额外测试以验证仿真稳定性。有关调优关节的完整指南，请参见 [Articulation Stability Guide](https://docs.omniverse.nvidia.com/kit/docs/omni_physics/latest/dev_guide/guides/articulation_stability_guide.html)。
+[[f1ac2766feb4e375a4e3248db71acfe7_MD5.jpeg|Open: Pasted image 20250514175116.png]]
+![[f1ac2766feb4e375a4e3248db71acfe7_MD5.jpeg]]
+
+
+> [!NOTE] Note
+> 
+> 组装后机器人组件的名称可能会在场景树中显示为红色。这是由于冗余路径属性导致的已知问题，将在后续版本中修复。
+
+
+---
+
+### **Assembling Other Rigid Bodies**  
+***组装其他刚体
+
+此工具也可用于将任意两个 USD 资产相互附着。为了对固定关节进行物理模拟，被组合的两个刚体必须已应用物理属性。Articulation 已自带物理属性，但 USD 网格（如安装支架）可能仅为可视化网格。Robot Assembler 扩展允许您在“Convert Prim To Rigid Body”面板中，将 USD 资产转换为具有物理属性的刚体。
+
+在 “Base Robot” 和 “Attach Robot” 面板中，您可以筛选出非 Articulation 的刚体。在下方示例视频中，舞台上有一个 UR10 的支架，但它只是一个未应用物理属性的网格。使用 “Convert Prim To Rigid Body” 面板后，该网格将获得物理属性，便可附着到 UR10 上。转换完成后，即可像组装两个机器人一样组装这两个资产。
+
+---
+
+### **Assembly Summary Frame**  
+***组装概览面板
+
+当两个刚体组装完成后，“Assembly Summary Frame” 面板会展开，并生成一段代码片段，精确复现用户在 Robot Assembler UI 中的操作。也就是说，如果用户加载了某个 USD 场景并组装了两个刚体，所提供的代码片段在加载同一场景后即可执行相同的组装。以在“组装机器人”教程中将 Fanuc 机械臂与 Allegro 机械手连接为例，生成的代码片段如下：
+
+```python
+from omni.isaac.robot_assembler import RobotAssembler, AssembledRobot
+from isaacsim.core.prims import Articulation
+import numpy as np
+
+base_robot_path = "/World/festo_cobot"
+attach_robot_path = "/World/allegro_hand"
+base_robot_mount_frame = "/flange"
+attach_robot_mount_frame = "/allegro_mount"
+fixed_joint_offset = np.array([0.0, 0.0, 0.0])
+fixed_joint_orient = np.array([1.0, 0.0, 0.0, 0.0])
+single_robot = False
+
+robot_assembler = RobotAssembler()
+assembled_robot = robot_assembler.assemble_articulations(
+    base_robot_path,
+    attach_robot_path,
+    base_robot_mount_frame,
+    attach_robot_mount_frame,
+    fixed_joint_offset,
+    fixed_joint_orient,
+    mask_all_collisions=True,
+    single_robot=single_robot
+)
+
+# 可在组装后编辑固定关节：
+# offset, orient = assembled_robot.get_fixed_joint_transform()
+# assembled_robot.set_fixed_joint_transform(np.array([.3,0,0]), np.array([1,0,0,0]))
+
+# 也可拆解组装体，此后 AssembledRobot 对象将无法使用：
+# assembled_robot.disassemble()
+
+# 控制组装后机器人方式取决于 single_robot 标志：
+if single_robot:
+    # 将两个机器人视为基座路径下的单一 Articulation
+    controllable_single_robot = Articulation(base_robot_path)
+else:
+    # 独立控制两个机器人
+    base_robot = Articulation(base_robot_path)
+    attach_robot = Articulation(attach_robot_path)
+```
+
+---
+
+### **Collision Masking**  
+***碰撞屏蔽
+
+当在两个刚体之间创建固定关节时，Robot Assembler 会同时屏蔽它们之间的碰撞，以避免因固定关节而导致的物理约束冲突——即被连接帧的碰撞网格本应发生碰撞，但机器人因固定关节无法移动。若用户仅希望屏蔽固定关节强制碰撞的帧之间的碰撞，而保留其他部位的碰撞，可将上述代码片段中的 `mask_all_collisions` 标志设为 `False`，然后通过 `assembled_robot.mask_collisions(prim_path_a: str, prim_path_b: str)` 手动屏蔽特定碰撞对。此方法仅会屏蔽指定 prim 路径之间的碰撞。
+
+---
+
+### **Summary**  
+***总结
+
+在本教程中，我们学到：
+
+- Robot Assembler 工具用于通过用户指定的固定关节，将两个机器人或刚体连接在一起。
+    
+- Robot Assembler 创建的固定关节经物理模拟，仅在时间轴播放时生效。
+    
+- 仅在资产需在播放时发生移动时，才需使用 Robot Assembler。
+    
+- 使用 UI 工具组装后，可通过 Python API 完全复现相同操作。

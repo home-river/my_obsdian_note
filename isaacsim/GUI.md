@@ -812,7 +812,7 @@ NVIDIA Isaac Sim 的 GUI 界面功能与 NVIDIA Omniverse™ USD Composer 中用
 ![[组装机器人3.webp]]
 ### 添加构件
 
-虽然直接驱动关节可以移动机器人，但使用 articulations（构件）能获得更高的仿真精度、减少关节误差，并能处理更大的质量比。要将一串连接的刚体和关节转成单个构件，需要添加 Articulation Root 组件。
+虽然直接驱动关节可以移动机器人，但使用 `articulations`（构件）能获得更高的仿真精度、减少关节误差，并能处理更大的质量比。要将一串连接的刚体和关节转成单个构件，需要添加 Articulation Root 组件。
 
 根据 Physics Core: Articulation 中对构件树的定义：
 

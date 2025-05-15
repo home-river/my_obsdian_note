@@ -1267,7 +1267,7 @@ Gripper Orientation Target: [-0.1690746   0.63886658  0.12752551  0.73959483]
 3. 这种扁平结构不仅阅读和导航困难，更关键的是，它并未定义哪些对象应作为整体运动，以及这些整体之间的父子关联。
     
 
-[[862fb6231c89ae10160a88af613f1ff2_MD5.jpeg|Open: Pasted image 20250514160527.png]]
+[[862fb6231c89ae10160a88af613f1ff2_MD5.jpeg|Open: Pasted image 20250514160527.png|625]]
 ![[862fb6231c89ae10160a88af613f1ff2_MD5.jpeg]]
 
 

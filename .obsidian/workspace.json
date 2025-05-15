@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/robot setup.md",
+                "file": "isaacsim/robot simulation.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "robot setup"
+              "title": "robot simulation"
             }
           }
         ],
@@ -157,13 +157,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/robot setup.md",
+                "file": "isaacsim/robot simulation.md",
                 "followCursor": false,
-                "showSearch": true,
+                "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "robot setup 的大纲"
+              "title": "robot simulation 的大纲"
             }
           },
           {
@@ -197,20 +197,21 @@
       "table-editor-obsidian:Advanced Tables Toolbar": false
     }
   },
-  "active": "01f82c25450d0d63",
+  "active": "aaadaf349ebf0b54",
   "lastOpenFiles": [
-    "f1ac2766feb4e375a4e3248db71acfe7_MD5.jpeg",
-    "Pasted image 20250514175116.png",
-    "cda3a7681b036be8f13db27cf4886a3e_MD5.jpeg",
-    "Pasted image 20250514173920.png",
-    "3ea8afb6f827c0bae0596a7343c2761a_MD5.jpeg",
-    "Pasted image 20250514173745.png",
-    "isaacsim/图片存放/robot setup/f72ba6ab500197472ad85ea8fbd9c577_MD5.jpeg",
+    "b70b2c6130ae5662650c507ce52413f5_MD5.jpeg",
+    "Pasted image 20250515084501.png",
+    "b3259624d9c21692b189c97382979f74_MD5.jpeg",
+    "Pasted image 20250515082708.png",
+    "isaacsim/图片存放/机器人仿真",
+    "65b51f556b4a9687c2db80e538183513_MD5.jpeg",
+    "Pasted image 20250515081906.png",
+    "isaacsim/图片存放/robot setup/f1ac2766feb4e375a4e3248db71acfe7_MD5.jpeg",
     "isaacsim/robot setup.md",
-    "isaacsim/图片存放/robot setup/ad659a20a3fa6b031f6e01bece65bda5_MD5.jpeg",
-    "Pasted image 20250514171656.png",
-    "isaacsim/图片存放/robot setup/bb216ff6190bbc3c17b38f5951a8e7a9_MD5.jpeg",
-    "Pasted image 20250514170836.png",
+    "isaacsim/图片存放/robot setup/cda3a7681b036be8f13db27cf4886a3e_MD5.jpeg",
+    "isaacsim/图片存放/robot setup/3ea8afb6f827c0bae0596a7343c2761a_MD5.jpeg",
+    "Pasted image 20250514175116.png",
+    "Pasted image 20250514173920.png",
     "isaacsim/图片存放/robot setup",
     "isaacsim/utilities（公共工具）.md",
     "isaacsim/图片存放/杂项图片",
@@ -229,7 +230,6 @@
     "滤波",
     "ABS/ABS笔记.md",
     "杂项/Isaacsim选项卡翻译.md",
-    "ABS",
     "isaacsim/参数存放/参数存放.md",
     "isaacsim/extension/extension.md",
     "isaacsim/模型命名规则.md",

@@ -2698,3 +2698,169 @@ else:
   
 
 ---
+
+# 资源优化（Asset Optimization）
+
+## 学习目标
+
+本教程讲解如何提升机器人资源（asset）的性能，并说明在哪些方面可以进行取舍，从而实现更快速的仿真或渲染时间。
+
+🕒 **教程时长：20–30 分钟**
+
+---
+
+## 入门准备
+
+### 先决条件
+
+- 完成“Getting Started Tutorials”系列，了解在 NVIDIA Isaac Sim 中导航的基本核心概念。
+    
+- 完成“组装一个简单机器人（Assemble a Simple Robot）”教程，学习刚体 API、碰撞 API、关节、驱动器和多体（articulations）的概念。
+    
+- 阅读 Onshape 导入器相关文档，并观看在 Onshape 中绑定机器人（rigging）的教学视频。
+    
+- 熟悉 Mesh Merge Tool（网格合并工具）。
+    
+
+---
+
+## 加载机器人
+
+本教程使用 **NVIDIA Kaya Robot** 资源。
+
+1. 从 Onshape 的 CAD 资源导入 Onshape 版本的机器人。在 Onshape 导入器的搜索栏中粘贴 URL，然后双击结果即可导入。
+    
+2. 资源加载后：
+    
+    - 创建一个新 Stage（舞台），不要包含导入过程中附带的 Reference。
+        
+    - 将该 Stage 以 `kaya_optimized.usd` 命名，并保存在导入资源的同一文件夹中。
+        
+    - 你可以在属性面板（Property Panel）中的 Reference 或 Payload 区域找到源文件，点击“Locate File”图标定位文件。
+        
+3. 打开 Layer（图层）选项卡，将 `NVIDIA_Kaya_Robot_edit.usd` 拖入 Root Layer。
+    
+    > `NVIDIA_Kaya_Robot_base.usd` 是从 Onshape 导入后的原始清洁资源，请避免直接编辑，以便日后可重新导入资源进行更新。
+    
+
+此流程确保你在准备好提交所有更改之前保留原始资源。
+
+---
+
+## 合并网格（Merging Meshes）
+
+通过“合并网格”简化资源的 USD 树结构。这将减少 Prim 数量并提升性能，但**不会减少内存使用量**。
+
+1. 打开合并工具：**Isaac Utils > Merge Mesh Tool**
+    
+2. 选中所有主要机身部件，从 `Kaya_Motor_Bottom_Plate_02` 到 `Kaya_Terminal_Block_Cover`（Shift 选中范围）
+    
+3. 勾选：
+    
+    - **Deactivate Source Assets**
+        
+    - **Combine Materials**，并在文本框中输入：`/World/Looks`
+        
+4. 点击 **MERGE**
+    
+5. 导航到合并后的文件夹，将合并网格重命名为其对应的刚体名，例如：`Main_Body`
+    
+6. 将合并后的网格拖入 `/World`
+    
+
+### 对于轮子（Wheel），还需执行以下额外步骤：
+
+1. 创建三个用于引用的 Xform：
+    
+    - `/World/NVIDIA_Kaya_Robot/MX_12W_Drive_Wheel_ASM/.../Kaya_Wheel_Hub_Inside`
+        
+    - `/World/NVIDIA_Kaya_Robot/MX_12W_Drive_Wheel_ASM_01/...`
+        
+    - `/World/NVIDIA_Kaya_Robot/MX_12W_Drive_Wheel_ASM_02/...`
+        
+2. 取消勾选每个 Xform 的 **Instanceable**
+    
+3. 将每个 Xform 拖入上一步的各自 prim 内部
+    
+4. 如果 Xform 位于原点（Translate 和 Orient 为 0）：
+    
+    - 前往 **Edit > Preferences > Stage**，勾选 **Keep World Prim when Reparenting**
+        
+    - 否则，请手动设置 translate 和 orient 属性为 0
+        
+5. 将每个 Xform 拖入其对应的 `Dynamixel_axis` 父级
+    
+6. 将其中一个 Xform 重命名为 `Dynamixel_Axis`
+    
+7. 将其它同级项重新父级化到该 Xform 中
+    
+8. 选择新命名的 `Dynamixel_Axis` Xform，点击 **MERGE**
+    
+9. 将合并网格拖入 `/World`
+    
+10. 保存图层（Save the layer）
+    
+
+> 说明：其它轮毂无需合并，因为第一个轮毂已被重复使用。滚轮（rollers）本身已是单一网格，也不需要合并。
+
+---
+
+## 重用重复几何体（Reusing Duplicate Geometries）
+
+为了避免相同几何体占用过多内存，需要识别并用相同实例替换重复网格：
+
+1. 为主机身和轮毂创建新的 SubLayer，分别命名为：
+    
+    - `main_body.usd`
+        
+    - `wheel_hub.usd`
+        
+2. 将它们保存在同一目录下新建的 **Instances** 文件夹内
+    
+3. 操作：
+    
+    - 将 `/World/Looks` 和 `/World/Main_Body` 拖入 main_body 图层
+        
+    - 仅保存 `main_body.usd`
+        
+    - 删除 `/World/Dynamixel_axis` 的 transform
+        
+    - 将 `/World/Looks`（来自 main_body）和 `/World/Dynamixel_axis` 拖入 wheel_hub 图层
+        
+    - 仅保存 `wheel_hub.usd`
+        
+    - 将 `/World/Looks` 拖回 Root Layer
+        
+    - 移除 `main_body` 和 `wheel_hub` 的 SubLayer
+        
+    - 保存 Root Layer
+        
+
+这样你就：
+
+- 将新合并网格移至各自的 USD 文件中
+    
+- 拷贝了 Looks 文件夹
+    
+- 简化了 USD 的复杂度
+    
+- 所有网格现在均可实例化
+    
+- 保留了原始资源的完整历史（可随时回滚至未合并状态）
+    
+
+---
+
+## 其他优化建议（Other Considerations）
+
+- **减少光源数量**  
+    每个光源都会影响渲染性能。如果场景中光源超过 10 个，渲染会回退至基于采样的照明方式，从而避免性能严重下降。
+    
+- **减少半透明材质使用**  
+    每个半透明材质相比默认的 OmniPBR 材质会产生更大性能瓶颈。
+    
+- **优化物理性能**  
+    查找可修改的仿真设置以降低计算成本，尤其是碰撞体（collider）通常计算开销较大。简化碰撞形状、减少接触点数目都能显著提升性能。找到最佳“精度与性能平衡点”通常需要多次实验。
+    
+
+---

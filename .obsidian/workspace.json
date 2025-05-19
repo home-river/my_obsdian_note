@@ -13,30 +13,15 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/Isaacsim Editor/Core(api).md",
+                "file": "ABS/ABS笔记.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Core(api)"
-            }
-          },
-          {
-            "id": "845862f88a151924",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "isaacsim/GUI.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "GUI"
+              "title": "ABS笔记"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
@@ -157,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/GUI.md",
+                "file": "ABS/ABS笔记.md",
                 "followCursor": false,
                 "showSearch": true,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "GUI 的大纲"
+              "title": "ABS笔记 的大纲"
             }
           },
           {
@@ -195,28 +180,36 @@
       "table-editor-obsidian:Advanced Tables Toolbar": false
     }
   },
-  "active": "845862f88a151924",
+  "active": "5749a32679929d63",
   "lastOpenFiles": [
-    "isaacsim/robot setup.md",
+    "isaaclab/图片存放/Pasted image 20250519105252.png",
+    "isaaclab/图片存放",
+    "ABS/ABS笔记.md",
+    "isaaclab/Overview概述/核心概念.md",
+    "isaaclab/Overview概述/开发者指南.md",
+    "Pasted image 20250519104524.png",
+    "isaaclab/图片存放/Pasted image 20250519104117.png",
+    "isaaclab/图片存放/Pasted image 20250519104104.png",
+    "isaaclab/图片存放/Pasted image 20250519104059.png",
+    "isaaclab/图片存放/Pasted image 20250519104050.png",
+    "isaaclab/图片存放/Pasted image 20250519104043.png",
+    "isaaclab/图片存放/Pasted image 20250519104011.png",
+    "isaaclab/图片存放/Pasted image 20250519102543.png",
+    "isaaclab/图片存放/Pasted image 20250519101433.png",
+    "isaaclab/图片存放",
+    "isaaclab/Overview概述",
     "isaacsim/Isaacsim Editor/Core(api).md",
+    "未命名",
+    "isaaclab",
+    "isaacsim/GUI.md",
+    "isaacsim/robot setup.md",
     "isaacsim/Isaacsim Editor/导航.md",
     "isaacsim/参考资料.md",
-    "isaacsim/GUI.md",
     "isaacsim/robot simulation.md",
     "isaacsim/Python script/Python Scripting.md",
     "杂项/Isaacsim选项卡翻译.md",
     "isaacsim/utilities（公共工具）.md",
-    "isaacsim/图片存放/robot setup/1d56a5da8b9b45842d124d2788e7601d_MD5.jpeg",
-    "isaacsim/图片存放/robot setup/862fb6231c89ae10160a88af613f1ff2_MD5.jpeg",
-    "b70b2c6130ae5662650c507ce52413f5_MD5.jpeg",
-    "Pasted image 20250515084501.png",
-    "b3259624d9c21692b189c97382979f74_MD5.jpeg",
-    "Pasted image 20250515082708.png",
     "isaacsim/图片存放/机器人仿真",
-    "65b51f556b4a9687c2db80e538183513_MD5.jpeg",
-    "Pasted image 20250515081906.png",
-    "isaacsim/图片存放/robot setup/f1ac2766feb4e375a4e3248db71acfe7_MD5.jpeg",
-    "isaacsim/图片存放/robot setup/cda3a7681b036be8f13db27cf4886a3e_MD5.jpeg",
     "isaacsim/图片存放/robot setup",
     "isaacsim/图片存放/杂项图片",
     "isaacsim/图片存放/杂项图片/isaacsim配置.md",
@@ -224,13 +217,7 @@
     "isaacsim/图片存放/杂项图片/欢迎.md",
     "isaacsim/图片存放/扩展",
     "isaacsim/图片存放/import wizard",
-    "isaacsim/图片存放/组装机器人",
-    "isaacsim/图片存放/选择模式",
-    "isaacsim/图片存放/添加机器人",
-    "isaacsim/图片存放/参考资料",
     "滤波/贝叶斯滤波.md",
-    "滤波",
-    "ABS/ABS笔记.md",
     "isaacsim/参数存放/参数存放.md",
     "isaacsim/extension/extension.md",
     "isaacsim/模型命名规则.md",

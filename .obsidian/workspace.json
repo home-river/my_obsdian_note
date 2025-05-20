@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "ABS/ABS笔记.md",
+                "file": "isaaclab/教程/教程.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "ABS笔记"
+              "title": "教程"
             }
           }
         ]
@@ -142,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "ABS/ABS笔记.md",
+                "file": "isaaclab/教程/教程.md",
                 "followCursor": false,
                 "showSearch": true,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "ABS笔记 的大纲"
+              "title": "教程 的大纲"
             }
           },
           {
@@ -182,20 +182,24 @@
   },
   "active": "5749a32679929d63",
   "lastOpenFiles": [
-    "isaaclab/图片存放/Pasted image 20250519105252.png",
-    "isaaclab/图片存放",
-    "ABS/ABS笔记.md",
     "isaaclab/Overview概述/核心概念.md",
+    "isaaclab/教程/教程.md",
+    "isaaclab/Overview概述/示例演示.md",
+    "isaaclab/教程",
+    "isaaclab/Overview概述/可用环境.md",
+    "isaaclab/图片存放/Pasted image 20250520140042.png",
+    "isaaclab/图片存放/Pasted image 20250520135044.png",
+    "isaaclab/图片存放/Pasted image 20250520135029.png",
+    "isaaclab/图片存放/Pasted image 20250520134954.png",
+    "isaaclab/图片存放/Pasted image 20250520134900.png",
+    "isaaclab/图片存放/Pasted image 20250520134831.png",
+    "isaaclab/图片存放/Pasted image 20250520134805.png",
+    "isaaclab/图片存放/Pasted image 20250520134552.png",
+    "isaaclab/图片存放/Pasted image 20250520115931.png",
+    "isaaclab/图片存放/Pasted image 20250520115926.png",
+    "ABS/ABS笔记.md",
+    "isaaclab/图片存放",
     "isaaclab/Overview概述/开发者指南.md",
-    "Pasted image 20250519104524.png",
-    "isaaclab/图片存放/Pasted image 20250519104117.png",
-    "isaaclab/图片存放/Pasted image 20250519104104.png",
-    "isaaclab/图片存放/Pasted image 20250519104059.png",
-    "isaaclab/图片存放/Pasted image 20250519104050.png",
-    "isaaclab/图片存放/Pasted image 20250519104043.png",
-    "isaaclab/图片存放/Pasted image 20250519104011.png",
-    "isaaclab/图片存放/Pasted image 20250519102543.png",
-    "isaaclab/图片存放/Pasted image 20250519101433.png",
     "isaaclab/图片存放",
     "isaaclab/Overview概述",
     "isaacsim/Isaacsim Editor/Core(api).md",
@@ -216,7 +220,6 @@
     "isaacsim/图片存放/杂项图片/欧拉角和万向锁.md",
     "isaacsim/图片存放/杂项图片/欢迎.md",
     "isaacsim/图片存放/扩展",
-    "isaacsim/图片存放/import wizard",
     "滤波/贝叶斯滤波.md",
     "isaacsim/参数存放/参数存放.md",
     "isaacsim/extension/extension.md",
@@ -224,7 +227,6 @@
     "isaacsim/API-Isaacsim documentation.md",
     "isaacsim/Python script/示例代码解读.md",
     "isaacsim/Isaacsim Editor/Core（Prim）.md",
-    "isaacsim/常用包记录.md",
-    "[Core.md"
+    "isaacsim/常用包记录.md"
   ]
 }

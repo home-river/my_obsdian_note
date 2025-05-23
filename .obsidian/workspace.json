@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/GUI.md",
+                "file": "isaaclab/教程/教程.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "GUI"
+              "title": "教程"
             }
           }
         ]
@@ -142,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/GUI.md",
+                "file": "isaaclab/教程/教程.md",
                 "followCursor": false,
                 "showSearch": true,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "GUI 的大纲"
+              "title": "教程 的大纲"
             }
           },
           {
@@ -182,6 +182,7 @@
   },
   "active": "5749a32679929d63",
   "lastOpenFiles": [
+    "isaacsim/GUI.md",
     "isaacsim/参考资料.md",
     "isaaclab/教程/教程.md",
     "isaaclab/教程/Isaaclab整体流程.md",
@@ -207,7 +208,6 @@
     "isaacsim/Isaacsim Editor/Core(api).md",
     "未命名",
     "isaaclab",
-    "isaacsim/GUI.md",
     "isaacsim/robot setup.md",
     "isaacsim/Isaacsim Editor/导航.md",
     "isaacsim/robot simulation.md",

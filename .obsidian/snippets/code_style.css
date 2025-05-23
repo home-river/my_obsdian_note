@@ -1,0 +1,24 @@
+/* 针对阅读视图和实时预览中的代码块 */
+.markdown-rendered pre > code,
+.cm-s-obsidian pre.HyperMD-codeblock > code, /* 针对旧版实时预览/CM5 */
+.cm-editor .HyperMD-codeblock .cm-line { /* 更精确地针对 CM6 实时预览 */
+    white-space: pre !important; /* 防止换行 */
+    overflow-x: auto !important; /* 启用横向滚动 */
+    word-wrap: normal !important; /* 覆盖任何自动换行设置 */
+}
+
+/* 如果以上不够用，针对实时预览 (CM6) 的替代/更广泛的选择器 */
+.markdown-source-view.mod-cm6 .cm-content > .cm-embed-block pre,
+.markdown-source-view.mod-cm6 .cm-content > .cm-line:has(span.cm-meta.cm-formatting-code-block.cm-formatting-code-block-begin) + .cm-line,
+.markdown-source-view.mod-cm6 .cm-content > .cm-line:has(span.cm-meta.cm-formatting-code-block.cm-formatting-code-block-end):not(:has(span.cm-meta.cm-formatting-code-block.cm-formatting-code-block-begin)) ~ .cm-line:not(:has(span.cm-meta.cm-formatting-code-block.cm-formatting-code-block-end)) {
+    white-space: pre !important;
+    overflow-x: auto !important;
+    word-wrap: normal !important;
+}
+
+/* 确保 pre 标签本身也允许滚动 */
+.markdown-rendered pre,
+.cm-s-obsidian pre.HyperMD-codeblock,
+.cm-editor .HyperMD-codeblock {
+    overflow-x: auto !important;
+}

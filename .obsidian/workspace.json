@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaacsim/Python script/Python Scripting.md",
+                "file": "isaaclab/教程/教程.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Python Scripting"
+              "title": "教程"
             }
           }
         ]
@@ -53,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "默认地平面",
+                "query": "",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -74,8 +74,7 @@
               "title": "书签"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
@@ -143,13 +142,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "isaacsim/Python script/Python Scripting.md",
+                "file": "isaaclab/教程/教程.md",
                 "followCursor": false,
                 "showSearch": true,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Python Scripting 的大纲"
+              "title": "教程 的大纲"
             }
           },
           {
@@ -181,19 +180,20 @@
       "table-editor-obsidian:Advanced Tables Toolbar": false
     }
   },
-  "active": "1947abe5e554e0e0",
+  "active": "5749a32679929d63",
   "lastOpenFiles": [
+    "isaaclab/Overview概述/开发者指南.md",
+    "isaaclab/教程/教程.md",
+    "isaaclab/Overview概述/可用环境.md",
+    "isaaclab/Overview概述/示例演示.md",
+    "isaaclab/Overview概述/核心概念.md",
+    "isaaclab/教程/Isaaclab整体流程.md",
+    "isaacsim/Python script/Python Scripting.md",
     "isaacsim/robot setup.md",
     "isaacsim/robot simulation.md",
-    "isaacsim/Python script/Python Scripting.md",
-    "isaaclab/教程/教程.md",
     "isaacsim/GUI.md",
     "isaacsim/参考资料.md",
-    "isaaclab/教程/Isaaclab整体流程.md",
-    "isaaclab/Overview概述/核心概念.md",
-    "isaaclab/Overview概述/示例演示.md",
     "isaaclab/教程",
-    "isaaclab/Overview概述/可用环境.md",
     "isaaclab/图片存放/Pasted image 20250520140042.png",
     "isaaclab/图片存放/Pasted image 20250520135044.png",
     "isaaclab/图片存放/Pasted image 20250520135029.png",
@@ -206,7 +206,6 @@
     "isaaclab/图片存放/Pasted image 20250520115926.png",
     "ABS/ABS笔记.md",
     "isaaclab/图片存放",
-    "isaaclab/Overview概述/开发者指南.md",
     "isaaclab/图片存放",
     "isaaclab/Overview概述",
     "isaacsim/Isaacsim Editor/Core(api).md",

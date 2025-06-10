@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaaclab/教程/教程.md",
+                "file": "ABS/CarSim/Carsim笔记.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "教程"
+              "title": "Carsim笔记"
             }
           }
         ]
@@ -192,25 +192,34 @@
   },
   "active": "5749a32679929d63",
   "lastOpenFiles": [
-    "isaaclab/教程/Isaaclab整体流程.md",
-    "isaaclab/Overview概述/核心概念.md",
+    "ABS/ABS笔记.md",
+    "ABS/CarSim/Carsim笔记.md",
     "isaaclab/教程/教程.md",
-    "isaaclab/解决的问题.md",
-    "isaacsim/robot simulation.md",
     "isaacsim/robot setup.md",
+    "isaacsim/Isaacsim Editor/Core(api).md",
+    "isaacsim/Isaacsim Editor/Core（Prim）.md",
+    "isaaclab/Overview概述/核心概念.md",
+    "杂项/Isaacsim选项卡翻译.md",
+    "isaacsim/Python script/Python Scripting.md",
+    "isaacsim/Isaacsim Editor/导航.md",
+    "isaacsim/Python script/示例代码解读.md",
+    "isaacsim/GUI.md",
+    "isaacsim/robot simulation.md",
+    "isaacsim/utilities（公共工具）.md",
+    "isaaclab/杂项/杂项内容.md",
+    "isaaclab/杂项",
+    "isaaclab/教程/Isaaclab整体流程.md",
+    "isaaclab/解决的问题.md",
     "ABS/CarSim/图片存放/Pasted image 20250604150122.png",
     "ABS/CarSim/图片存放/Pasted image 20250604151039.png",
-    "ABS/CarSim/Carsim笔记.md",
     "ABS/CarSim/图片存放",
     "isaacsim/API-Isaacsim documentation.md",
-    "isaacsim/Python script/Python Scripting.md",
     "isaaclab/Overview概述/示例演示.md",
     "ABS/CarSim",
     "STM32/GPIO.md",
     "STM32/freeRTOS.md",
     "STM32/定时器中断.md",
     "STM32/图片存放/Pasted image 20250526111721.png",
-    "isaacsim/GUI.md",
     "isaacsim/参考资料.md",
     "isaaclab/教程",
     "isaaclab/Overview概述/可用环境.md",
@@ -221,22 +230,13 @@
     "isaaclab/图片存放/Pasted image 20250520134900.png",
     "isaaclab/图片存放/Pasted image 20250520134831.png",
     "isaaclab/图片存放/Pasted image 20250520134805.png",
-    "ABS/ABS笔记.md",
     "isaaclab/图片存放",
     "isaaclab/Overview概述/开发者指南.md",
     "isaaclab/图片存放",
     "isaaclab/Overview概述",
-    "isaacsim/Isaacsim Editor/Core(api).md",
     "未命名",
     "isaaclab",
-    "isaacsim/Isaacsim Editor/导航.md",
-    "杂项/Isaacsim选项卡翻译.md",
-    "isaacsim/utilities（公共工具）.md",
     "isaacsim/图片存放/机器人仿真",
-    "isaacsim/图片存放/robot setup",
-    "isaacsim/图片存放/杂项图片/isaacsim配置.md",
-    "isaacsim/图片存放/杂项图片/欧拉角和万向锁.md",
-    "isaacsim/图片存放/杂项图片/欢迎.md",
-    "滤波/贝叶斯滤波.md"
+    "isaacsim/图片存放/杂项图片/isaacsim配置.md"
   ]
 }

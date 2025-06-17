@@ -27,26 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "isaaclab/教程/教程.md",
+                "file": "isaaclab/杂项/源码内容.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "教程"
-            }
-          },
-          {
-            "id": "e3eefa33f601e16a",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "isaacsim/参考资料.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "参考资料"
+              "title": "源码内容"
             }
           }
         ],
@@ -219,13 +205,14 @@
       "table-editor-obsidian:Advanced Tables Toolbar": false
     }
   },
-  "active": "09e7e3e61209c057",
+  "active": "6a43ec4a10f69462",
   "lastOpenFiles": [
+    "isaaclab/杂项/direct项目阅读.md",
+    "isaaclab/杂项/源码内容.md",
     "isaacsim/参考资料.md",
+    "isaaclab/解决的问题.md",
     "isaaclab/教程/教程.md",
     "isaaclab/Overview概述/核心概念.md",
-    "isaaclab/杂项/杂项内容.md",
-    "isaaclab/解决的问题.md",
     "isaacsim/Isaacsim Editor/Core(api).md",
     "isaacsim/robot simulation.md",
     "isaacsim/robot setup.md",
@@ -253,7 +240,6 @@
     "STM32/定时器中断.md",
     "STM32/图片存放/Pasted image 20250526111721.png",
     "isaaclab/教程",
-    "isaaclab/Overview概述/可用环境.md",
     "isaaclab/图片存放/Pasted image 20250520140042.png",
     "isaaclab/图片存放/Pasted image 20250520135044.png",
     "isaaclab/图片存放/Pasted image 20250520135029.png",
